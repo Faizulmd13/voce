@@ -12,6 +12,12 @@ export interface TranslationRecord {
   charCount: number;
 }
 
+export interface TranslationPayload {
+  source_text: string;
+  target_lang: string;
+  source_lang?: string;
+}
+
 export interface DictationRecord {
   id: string;
   timestamp: string;

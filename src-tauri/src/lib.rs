@@ -18,6 +18,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 pub struct TranslationPayload {
     pub source_text: String,
     pub target_lang: String,
+    pub source_lang: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -328,9 +329,21 @@ async fn execute_local_translation(
     }
 
     let nllb_target_code = map_to_nllb_lang_code(&payload.target_lang);
+    let nllb_source_code = payload
+        .source_lang
+        .as_deref()
+        .map(|s| {
+            if s.eq_ignore_ascii_case("auto") || s.is_empty() {
+                "auto"
+            } else {
+                map_to_nllb_lang_code(s)
+            }
+        })
+        .unwrap_or("auto");
+
     println!(
-        "[Translation Engine] Translating into {} (token: {}): {}",
-        payload.target_lang, nllb_target_code, text
+        "[Translation Engine] Translating from [{}] into [{}] (token: {}): {}",
+        nllb_source_code, payload.target_lang, nllb_target_code, text
     );
 
     let executable_path = get_sidecar_path(&app, "translator");
@@ -361,9 +374,13 @@ async fn execute_local_translation(
     }
 
     let target_token = nllb_target_code.to_string();
+    let source_token = nllb_source_code.to_string();
     let output = tokio::task::spawn_blocking(move || {
         let mut cmd = Command::new(&executable_path);
         cmd.arg("-t").arg(&target_token);
+        if source_token != "auto" {
+            cmd.arg("-s").arg(&source_token);
+        }
         cmd.arg("-i").arg(&text);
         if model_dir.exists() {
             cmd.arg("-m").arg(&model_dir);

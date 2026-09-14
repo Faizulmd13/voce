@@ -4,7 +4,7 @@ import { TranslationRecord } from '../../types';
 import { 
   getClipboardText, 
   executeLocalTranslation, 
-  injectTextToCursor,
+  injectTextToCursor, 
   hideOverlay 
 } from '../../services/tauri';
 import { listen } from '@tauri-apps/api/event';
@@ -32,7 +32,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
   isStandalone = false,
 }) => {
   const [sourceText, setSourceText] = useState('');
-  const [sourceLang, setSourceLang] = useState('Auto-detected');
+  const [selectedSourceLang, setSelectedSourceLang] = useState('auto');
   const [translatedText, setTranslatedText] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -47,18 +47,18 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
     }
   };
 
-  const runTranslation = async (text: string, target: string) => {
+  const runTranslation = async (text: string, target: string, source: string = selectedSourceLang) => {
     if (!text || !text.trim()) {
       setTranslatedText('');
       return;
     }
     setIsTranslating(true);
     try {
-      const translated = await executeLocalTranslation(text, target);
+      const translated = await executeLocalTranslation(text, target, source);
       setTranslatedText(translated);
-      setSourceLang('Auto-detected');
     } catch (e) {
       console.error('Translation error:', e);
+      setTranslatedText('');
     } finally {
       setIsTranslating(false);
     }
@@ -71,7 +71,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
         const clip = await getClipboardText();
         if (clip && clip.trim()) {
           setSourceText(clip);
-          await runTranslation(clip, selectedTargetLang);
+          await runTranslation(clip, selectedTargetLang, selectedSourceLang);
         }
       } catch (e) {
         console.warn('Failed to load clipboard text:', e);
@@ -84,8 +84,9 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
     const unlistenPromise = listen<TranslationEventPayload>('trigger-translate-overlay', async (event) => {
       if (event.payload) {
         setSourceText(event.payload.source_text);
-        setSelectedTargetLang(event.payload.target_lang || 'English');
-        await runTranslation(event.payload.source_text, event.payload.target_lang || 'English');
+        const trg = event.payload.target_lang || 'English';
+        setSelectedTargetLang(trg);
+        await runTranslation(event.payload.source_text, trg, selectedSourceLang);
       }
     });
 
@@ -102,17 +103,23 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
     };
   }, []);
 
-  const handleSourceChange = async (text: string) => {
+  const handleSourceTextChange = async (text: string) => {
     setSourceText(text);
-    await runTranslation(text, selectedTargetLang);
+    await runTranslation(text, selectedTargetLang, selectedSourceLang);
+  };
+
+  const handleSourceLangChange = async (source: string) => {
+    setSelectedSourceLang(source);
+    await runTranslation(sourceText, selectedTargetLang, source);
   };
 
   const handleTargetLangChange = async (target: string) => {
     setSelectedTargetLang(target);
-    await runTranslation(sourceText, target);
+    await runTranslation(sourceText, target, selectedSourceLang);
   };
 
   const handleCopy = () => {
+    if (!translatedText) return;
     navigator.clipboard.writeText(translatedText);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -123,7 +130,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
       id: `trn-${Date.now()}`,
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
       sourceText,
-      sourceLang,
+      sourceLang: selectedSourceLang === 'auto' ? 'Auto-detected' : selectedSourceLang,
       translatedText,
       targetLang: selectedTargetLang,
       charCount: sourceText.length,
@@ -133,7 +140,9 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
     }
 
     // 1. Inject directly into OS cursor position
-    await injectTextToCursor(translatedText);
+    if (translatedText) {
+      await injectTextToCursor(translatedText);
+    }
 
     // 2. Hide overlay
     if (isStandalone) {
@@ -147,9 +156,10 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
 
   return (
     <div className={`w-full h-full flex items-center justify-center ${isStandalone ? 'bg-transparent' : 'fixed inset-0 z-50 bg-black/45 backdrop-blur-sm p-4'}`}>
-      <div className="backdrop-blur-md bg-neutral-900/95 border border-neutral-800/80 rounded-xl p-4 w-full max-w-[390px] shadow-2xl space-y-3 select-none">
+      {/* Root Modal Container: Uniform background, border, and rounded corners */}
+      <div className="w-full h-full bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden p-3.5 shadow-2xl flex flex-col justify-between space-y-2.5 select-none">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-neutral-800/60 pb-2">
+        <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
           <div className="flex items-center gap-1.5">
             <Languages className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-300 font-semibold">
@@ -157,16 +167,38 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1 text-[10px] font-mono">
-              <span className="px-1.5 py-0.5 rounded bg-neutral-950 text-neutral-400 border border-neutral-800 text-[10px]">
-                {sourceLang}
-              </span>
+              {/* Interactive Source Language Dropdown */}
+              <select
+                value={selectedSourceLang}
+                onChange={(e) => handleSourceLangChange(e.target.value)}
+                className="bg-neutral-900 border border-neutral-800 text-neutral-300 text-[10px] font-mono rounded px-1.5 py-0.5 focus:outline-none focus:border-neutral-700"
+                title="Source Language"
+              >
+                <option value="auto">Auto-detect</option>
+                <option value="English">English (eng_Latn)</option>
+                <option value="Spanish">Spanish (spa_Latn)</option>
+                <option value="French">French (fra_Latn)</option>
+                <option value="German">German (deu_Latn)</option>
+                <option value="Tamil">Tamil (tam_Taml)</option>
+                <option value="Hindi">Hindi (hin_Deva)</option>
+                <option value="Japanese">Japanese (jpn_Jpan)</option>
+                <option value="Chinese (Simplified)">Chinese (zho_Hans)</option>
+                <option value="Arabic">Arabic (ara_Arab)</option>
+                <option value="Russian">Russian (rus_Cyrl)</option>
+                <option value="Italian">Italian (ita_Latn)</option>
+                <option value="Portuguese">Portuguese (por_Latn)</option>
+              </select>
+
               <ArrowRight className="w-2.5 h-2.5 text-neutral-600" />
+
+              {/* Target Language Dropdown */}
               <select
                 value={selectedTargetLang}
                 onChange={(e) => handleTargetLangChange(e.target.value)}
-                className="bg-neutral-950 border border-neutral-800 text-emerald-400 text-[10px] font-mono rounded px-1.5 py-0.5 focus:outline-none"
+                className="bg-neutral-900 border border-neutral-800 text-emerald-400 text-[10px] font-mono rounded px-1.5 py-0.5 focus:outline-none focus:border-neutral-700"
+                title="Target Language"
               >
                 <option value="English">English (eng_Latn)</option>
                 <option value="Spanish">Spanish (spa_Latn)</option>
@@ -182,6 +214,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
                 <option value="Portuguese">Portuguese (por_Latn)</option>
               </select>
             </div>
+
             <button
               onClick={handleDismiss}
               className="text-neutral-500 hover:text-neutral-300 p-0.5 rounded transition-colors"
@@ -196,15 +229,15 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
         <div className="space-y-1">
           <textarea
             value={sourceText}
-            onChange={(e) => handleSourceChange(e.target.value)}
+            onChange={(e) => handleSourceTextChange(e.target.value)}
             rows={2}
-            className="w-full bg-neutral-950/80 border border-neutral-800/70 rounded-lg p-2 text-xs text-neutral-300 font-sans focus:outline-none focus:border-neutral-700 resize-none leading-relaxed"
+            className="w-full bg-neutral-900/90 border border-neutral-800 rounded-lg p-2 text-xs text-neutral-300 font-sans focus:outline-none focus:border-neutral-700 resize-none leading-relaxed"
             placeholder="Selected source text..."
           />
         </div>
 
         {/* Translated Text Box */}
-        <div className="space-y-1">
+        <div className="space-y-1 flex-1 flex flex-col justify-center">
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-mono uppercase tracking-wider text-neutral-500">
               Output ({selectedTargetLang})
@@ -213,7 +246,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
               <Sparkles className="w-2.5 h-2.5" /> CTranslate2 Local
             </span>
           </div>
-          <div className="bg-neutral-950/90 border border-neutral-800/80 rounded-lg p-2 text-xs text-neutral-100 font-sans leading-relaxed border-l-2 border-l-emerald-500 min-h-[46px] flex items-center">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-xs text-neutral-100 font-sans leading-relaxed min-h-[42px] flex items-center">
             {isTranslating ? (
               <span className="text-neutral-500 font-mono text-[11px] flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
@@ -230,12 +263,12 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="pt-2 border-t border-neutral-800/60 flex items-center justify-between">
+        <div className="pt-2 border-t border-neutral-800 flex items-center justify-between">
           <span className="text-[9px] font-mono text-neutral-500">Esc to close</span>
           <div className="flex items-center gap-1.5">
             <button
               onClick={handleCopy}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono text-neutral-300 hover:text-neutral-100 bg-neutral-950 border border-neutral-800 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono text-neutral-300 hover:text-neutral-100 bg-neutral-900 border border-neutral-800 transition-colors"
             >
               {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
               <span>{copied ? 'Copied' : 'Copy'}</span>

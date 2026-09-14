@@ -71,11 +71,16 @@ export async function getClipboardText(): Promise<string> {
   return await invoke<string>('get_clipboard_text');
 }
 
-export async function executeLocalTranslation(sourceText: string, targetLang: string = 'English'): Promise<string> {
+export async function executeLocalTranslation(
+  sourceText: string,
+  targetLang: string = 'English',
+  sourceLang: string = 'auto'
+): Promise<string> {
   return await invoke<string>('execute_local_translation', {
     payload: {
       source_text: sourceText,
       target_lang: targetLang,
+      source_lang: sourceLang,
     },
   });
 }
