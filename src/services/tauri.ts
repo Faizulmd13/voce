@@ -10,37 +10,24 @@ export interface OAuthResult {
 }
 
 export async function triggerGoogleOAuth(): Promise<UserProfile> {
-  try {
-    const result = await invoke<OAuthResult>('start_google_oauth');
-    return {
-      name: result.name,
-      email: result.email,
-      isAuthenticated: result.is_authenticated,
-    };
-  } catch (e) {
-    console.warn('Tauri OAuth invoke failed, using mock auth:', e);
-    return {
-      name: 'Faizul MD',
-      email: 'faizul@voce.ai',
-      isAuthenticated: true,
-    };
-  }
+  const result = await invoke<OAuthResult>('start_google_oauth');
+  return {
+    name: result.name,
+    email: result.email,
+    isAuthenticated: result.is_authenticated,
+  };
 }
 
 export async function updateBackendHotkeys(sttHotkey: string, translateHotkey: string): Promise<void> {
-  try {
-    await invoke('update_global_hotkeys', {
-      sttHotkey,
-      translateHotkey,
-    });
-  } catch (e) {
-    console.warn('Failed to update backend hotkeys:', e);
-  }
+  await invoke('update_global_hotkeys', {
+    sttHotkey,
+    translateHotkey,
+  });
 }
 
 export function subscribeToOverlayTriggers(
   onStt: () => void,
-  onTranslate: () => void
+  onTranslate: (payload?: { source_text: string; translated_text: string; target_lang: string }) => void
 ): () => void {
   let unlistenStt: UnlistenFn | null = null;
   let unlistenTrn: UnlistenFn | null = null;
@@ -51,8 +38,8 @@ export function subscribeToOverlayTriggers(
     unlistenStt = unlisten;
   });
 
-  listen('trigger-translate-overlay', () => {
-    onTranslate();
+  listen<{ source_text: string; translated_text: string; target_lang: string }>('trigger-translate-overlay', (event) => {
+    onTranslate(event.payload);
   }).then((unlisten) => {
     unlistenTrn = unlisten;
   });
@@ -64,82 +51,43 @@ export function subscribeToOverlayTriggers(
 }
 
 export async function startAudioRecording(): Promise<void> {
-  try {
-    await invoke('start_audio_recording');
-  } catch (e) {
-    console.warn('Tauri audio recording start failed:', e);
-  }
+  await invoke('start_audio_recording');
 }
 
 export async function stopAudioRecording(): Promise<string> {
-  try {
-    return await invoke<string>('stop_audio_recording');
-  } catch (e) {
-    console.warn('Tauri audio recording stop failed, using fallback path:', e);
-    return 'temp_voce_recording.wav';
-  }
+  return await invoke<string>('stop_audio_recording');
 }
 
 export async function executeLocalTranscription(audioBufferPath: string, model: string = 'ggml-base.en.bin'): Promise<string> {
-  try {
-    return await invoke<string>('execute_local_transcription', {
-      payload: {
-        audio_buffer_path: audioBufferPath,
-        model,
-      },
-    });
-  } catch (e) {
-    console.warn('Tauri whisper sidecar failed, falling back:', e);
-    return 'The quick brown fox jumps over the lazy dog.';
-  }
+  return await invoke<string>('execute_local_transcription', {
+    payload: {
+      audio_buffer_path: audioBufferPath,
+      model,
+    },
+  });
 }
 
 export async function getClipboardText(): Promise<string> {
-  try {
-    return await invoke<string>('get_clipboard_text');
-  } catch (e) {
-    console.warn('Tauri clipboard read failed, using fallback:', e);
-    return 'Die Grenzen meiner Sprache bedeuten die Grenzen meiner Welt.';
-  }
+  return await invoke<string>('get_clipboard_text');
 }
 
 export async function executeLocalTranslation(sourceText: string, targetLang: string = 'English'): Promise<string> {
-  try {
-    return await invoke<string>('execute_local_translation', {
-      payload: {
-        source_text: sourceText,
-        target_lang: targetLang,
-      },
-    });
-  } catch (e) {
-    console.warn('Tauri translation sidecar failed, using fallback:', e);
-    if (sourceText.includes('Grenzen')) {
-      return 'The limits of my language mean the limits of my world.';
-    }
-    return `[${targetLang}] ${sourceText}`;
-  }
+  return await invoke<string>('execute_local_translation', {
+    payload: {
+      source_text: sourceText,
+      target_lang: targetLang,
+    },
+  });
 }
 
 export async function injectTextToCursor(text: string): Promise<void> {
-  try {
-    await invoke('inject_text_to_cursor', { text });
-  } catch (e) {
-    console.warn('Tauri inject text to cursor failed:', e);
-  }
+  await invoke('inject_text_to_cursor', { text });
 }
 
 export async function showOverlay(label: 'stt-overlay' | 'translate-overlay', offsetY?: number): Promise<void> {
-  try {
-    await invoke('show_overlay', { label, offset_y: offsetY });
-  } catch (e) {
-    console.warn('Failed to show overlay:', e);
-  }
+  await invoke('show_overlay', { label, offset_y: offsetY });
 }
 
 export async function hideOverlay(label: 'stt-overlay' | 'translate-overlay'): Promise<void> {
-  try {
-    await invoke('hide_overlay', { label });
-  } catch (e) {
-    console.warn('Failed to hide overlay:', e);
-  }
+  await invoke('hide_overlay', { label });
 }

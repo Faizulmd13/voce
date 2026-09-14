@@ -62,7 +62,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": "nsis",
     "resources": [
       "models/*",
       "models/nllb-200/*"

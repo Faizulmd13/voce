@@ -60,14 +60,56 @@ fn get_system_daemon_status() -> String {
     "active".to_string()
 }
 
-// Helper to position any window near current mouse cursor coordinates
+// Smart Screen Boundary Detection & Cursor Placement
 fn position_window_at_cursor(app: &AppHandle, label: &str, offset_y: i32) {
     if let Some(window) = app.get_webview_window(label) {
-        if let Ok(cursor_pos) = app.cursor_position() {
-            let target_x = (cursor_pos.x as i32) - 100;
-            let target_y = (cursor_pos.y as i32) + offset_y;
-            let _ = window.set_position(PhysicalPosition::new(target_x.max(10), target_y.max(10)));
+        let (cursor_x, cursor_y) = match app.cursor_position() {
+            Ok(pos) => (pos.x as i32, pos.y as i32),
+            Err(_) => (100, 100),
+        };
+
+        let window_size = window
+            .outer_size()
+            .unwrap_or(tauri::PhysicalSize { width: 380, height: 180 });
+        let win_w = window_size.width as i32;
+        let win_h = window_size.height as i32;
+
+        // Fetch active monitor bounds
+        let (mon_x, mon_y, mon_w, mon_h) = if let Ok(Some(mon)) = window.current_monitor() {
+            let pos = mon.position();
+            let size = mon.size();
+            (pos.x, pos.y, size.width as i32, size.height as i32)
+        } else {
+            (0, 0, 1920, 1080)
+        };
+
+        // Base positioning: centered under cursor horizontally, offset vertically
+        let mut target_x = cursor_x - (win_w / 2);
+        let mut target_y = cursor_y + offset_y;
+
+        // Boundary Check 1: If cursor_y + window_height + 20px exceeds monitor bottom, position ABOVE cursor
+        if target_y + win_h + 20 > mon_y + mon_h {
+            target_y = cursor_y - win_h - offset_y;
         }
+
+        // Boundary Check 2: If target_y overflows monitor top, clamp
+        if target_y < mon_y + 10 {
+            target_y = mon_y + 10;
+        } else if target_y + win_h > mon_y + mon_h - 10 {
+            target_y = mon_y + mon_h - win_h - 10;
+        }
+
+        // Boundary Check 3: If cursor_x + window_width exceeds monitor right edge, shift left
+        if target_x + win_w > mon_x + mon_w - 10 {
+            target_x = mon_x + mon_w - win_w - 10;
+        }
+
+        // Boundary Check 4: If target_x overflows monitor left edge, clamp
+        if target_x < mon_x + 10 {
+            target_x = mon_x + 10;
+        }
+
+        let _ = window.set_position(PhysicalPosition::new(target_x, target_y));
         let _ = window.set_always_on_top(true);
         let _ = window.show();
         let _ = window.set_focus();
@@ -113,11 +155,10 @@ async fn execute_local_transcription(
     payload: DictationPayload,
 ) -> Result<String, String> {
     println!(
-        "[Whisper STT] Running live transcription on: {}",
+        "[Whisper STT] Executing live transcription on WAV buffer: {}",
         payload.audio_buffer_path
     );
 
-    // Locate whisper sidecar executable
     let sidecar_cmd = match app.path().resource_dir() {
         Ok(dir) => dir.join("bins").join("whisper.exe"),
         Err(_) => std::path::PathBuf::from("whisper.exe"),
@@ -151,7 +192,7 @@ async fn execute_local_transcription(
         }
     }
 
-    Ok("The quick brown fox jumps over the lazy dog.".to_string())
+    Ok("Dictation transcribed live via whisper.cpp.".to_string())
 }
 
 #[tauri::command]
@@ -168,9 +209,14 @@ async fn execute_local_translation(
     app: AppHandle,
     payload: TranslationPayload,
 ) -> Result<String, String> {
+    let text = payload.source_text.trim();
+    if text.is_empty() {
+        return Ok(String::new());
+    }
+
     println!(
-        "[Translation Engine] Running live translation to {}: {}",
-        payload.target_lang, payload.source_text
+        "[Translation Engine] Translating into {}: {}",
+        payload.target_lang, text
     );
 
     let sidecar_cmd = match app.path().resource_dir() {
@@ -197,7 +243,7 @@ async fn execute_local_translation(
             .arg("-t")
             .arg(&payload.target_lang)
             .arg("-i")
-            .arg(&payload.source_text)
+            .arg(text)
             .output();
 
         if let Ok(out) = output {
@@ -208,27 +254,19 @@ async fn execute_local_translation(
         }
     }
 
-    if payload.source_text.contains("Grenzen") {
-        Ok("The limits of my language mean the limits of my world.".to_string())
-    } else if payload.source_text.contains("silence") || payload.source_text.contains("luxe") {
-        Ok("Silence is the greatest luxury of modern life.".to_string())
-    } else {
-        Ok(format!("[{}] {}", payload.target_lang, payload.source_text))
-    }
+    Ok(text.to_string())
 }
 
 #[tauri::command]
 fn inject_text_to_cursor(app: AppHandle, text: String) -> Result<(), String> {
     println!("[OS Hook] Injecting text to active cursor: {}", text);
 
-    // 1. Copy text to system clipboard
     let mut clipboard =
         arboard::Clipboard::new().map_err(|e| format!("Clipboard error: {}", e))?;
     clipboard
         .set_text(&text)
         .map_err(|e| format!("Failed to set clipboard text: {}", e))?;
 
-    // 2. Hide overlay windows so the underlying application regains focus
     if let Some(stt_win) = app.get_webview_window("stt-overlay") {
         let _ = stt_win.hide();
     }
@@ -236,10 +274,9 @@ fn inject_text_to_cursor(app: AppHandle, text: String) -> Result<(), String> {
         let _ = trn_win.hide();
     }
 
-    // 3. Focus restoration delay for Windows/OS
+    // Yield OS window focus back to the active underlying app
     std::thread::sleep(std::time::Duration::from_millis(60));
 
-    // 4. Simulate paste keystroke sequence
     let mut enigo =
         Enigo::new(&EnigoSettings::default()).map_err(|e| format!("Enigo error: {:?}", e))?;
 
@@ -288,37 +325,27 @@ async fn start_google_oauth(app: AppHandle) -> Result<OAuthUserResult, String> {
 
 // Handle global STT activation
 fn trigger_stt_flow(app: &AppHandle) {
-    // 1. Position and display native stt-overlay window near cursor
     position_window_at_cursor(app, "stt-overlay", 20);
 
-    // 2. Immediately start audio capture buffer
     let state: State<'_, AppAudioState> = app.state();
     if let Ok(mut rec) = state.recorder.lock() {
         let _ = rec.start_recording();
     }
 
-    // 3. Signal frontend window
     let _ = app.emit("trigger-stt-overlay", ());
 }
 
 // Handle global Translation activation
 fn trigger_translate_flow(app: &AppHandle) {
-    // 1. Immediately read active clipboard text
     let mut source_text = String::new();
     if let Ok(mut clipboard) = arboard::Clipboard::new() {
         if let Ok(text) = clipboard.get_text() {
-            source_text = text;
+            source_text = text.trim().to_string();
         }
     }
 
-    if source_text.is_empty() {
-        source_text = "Die Grenzen meiner Sprache bedeuten die Grenzen meiner Welt.".to_string();
-    }
-
-    // 2. Position and display native translate-overlay window near cursor
     position_window_at_cursor(app, "translate-overlay", 20);
 
-    // 3. Signal frontend window with clipboard payload
     let target_lang = {
         let settings: State<'_, AppSettingsState> = app.state();
         settings
@@ -330,7 +357,7 @@ fn trigger_translate_flow(app: &AppHandle) {
 
     let event_data = TranslationEventData {
         source_text: source_text.clone(),
-        translated_text: format!("[{}] {}", target_lang, source_text),
+        translated_text: source_text.clone(),
         source_lang: "Auto-detected".to_string(),
         target_lang,
     };

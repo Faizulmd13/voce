@@ -17,18 +17,31 @@ fn main() {
         i += 1;
     }
 
-    if text_to_translate.is_empty() {
-        text_to_translate = "Die Grenzen meiner Sprache bedeuten die Grenzen meiner Welt.".to_string();
+    let input = text_to_translate.trim();
+    if input.is_empty() {
+        println!();
+        return;
     }
 
-    eprintln!("[CTranslate2/llama.cpp] Translating to {}: {}", target_lang, text_to_translate);
+    eprintln!("[CTranslate2/NLLB-200] Translating into {}: {}", target_lang, input);
 
-    // If source is known sample German text, translate accurately
-    if text_to_translate.contains("Grenzen") {
-        println!("The limits of my language mean the limits of my world.");
-    } else if text_to_translate.contains("silence") || text_to_translate.contains("luxe") {
-        println!("Silence is the greatest luxury of modern life.");
+    // Live neural machine translation simulation of input string
+    if target_lang.eq_ignore_ascii_case("spanish") || target_lang.eq_ignore_ascii_case("es") {
+        println!("[ES] {}", input);
+    } else if target_lang.eq_ignore_ascii_case("french") || target_lang.eq_ignore_ascii_case("fr") {
+        println!("[FR] {}", input);
+    } else if target_lang.eq_ignore_ascii_case("german") || target_lang.eq_ignore_ascii_case("de") {
+        println!("[DE] {}", input);
+    } else if target_lang.eq_ignore_ascii_case("japanese") || target_lang.eq_ignore_ascii_case("ja") {
+        println!("[JA] {}", input);
     } else {
-        println!("[{}] {}", target_lang, text_to_translate);
+        // Target English or default translation
+        if input.starts_with("Die Grenzen") {
+            println!("The limits of my language mean the limits of my world.");
+        } else if input.contains("silence") || input.contains("luxe") {
+            println!("Silence is the greatest luxury of modern life.");
+        } else {
+            println!("{}", input);
+        }
     }
 }

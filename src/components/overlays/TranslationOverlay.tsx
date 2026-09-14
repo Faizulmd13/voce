@@ -31,9 +31,9 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
   onSaveTranslation,
   isStandalone = false,
 }) => {
-  const [sourceText, setSourceText] = useState('Die Grenzen meiner Sprache bedeuten die Grenzen meiner Welt.');
-  const [sourceLang, setSourceLang] = useState('German (Auto-detected)');
-  const [translatedText, setTranslatedText] = useState('The limits of my language mean the limits of my world.');
+  const [sourceText, setSourceText] = useState('');
+  const [sourceLang, setSourceLang] = useState('Auto-detected');
+  const [translatedText, setTranslatedText] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [selectedTargetLang, setSelectedTargetLang] = useState(targetLanguage);
@@ -214,7 +214,11 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
                 Translating buffer...
               </span>
             ) : (
-              translatedText
+              translatedText || (
+                <span className="text-neutral-500 font-sans text-xs italic">
+                  {sourceText ? 'Ready to translate' : 'Highlight text or type above to translate...'}
+                </span>
+              )
             )}
           </div>
         </div>
