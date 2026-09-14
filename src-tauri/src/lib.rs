@@ -37,7 +37,7 @@ async fn execute_local_translation(payload: TranslationPayload) -> Result<String
 }
 
 #[tauri::command]
-fn trigger_cursor_paste(app: AppHandle, text: String) -> Result<(), String> {
+fn trigger_cursor_paste(_app: AppHandle, text: String) -> Result<(), String> {
     println!("Simulating OS cursor paste for text: {}", text);
     // OS hook will be hooked up via enigo / SendInput in Phase 4
     Ok(())
