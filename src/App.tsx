@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavPage, OverlayMode, TranslationRecord, UserSettings, AppMetrics } from './types';
 import { Sidebar } from './components/Sidebar';
 import { HomePage } from './pages/HomePage';
@@ -6,6 +6,18 @@ import { HistoryPage } from './pages/HistoryPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DictationOverlay } from './components/overlays/DictationOverlay';
 import { TranslationOverlay } from './components/overlays/TranslationOverlay';
+import { 
+  loadPreferencesFromDb, 
+  savePreferencesToDb, 
+  loadHistoryFromDb, 
+  insertHistoryToDb, 
+  clearHistoryInDb 
+} from './services/db';
+import { 
+  triggerGoogleOAuth, 
+  updateBackendHotkeys, 
+  subscribeToOverlayTriggers 
+} from './services/tauri';
 
 const INITIAL_SETTINGS: UserSettings = {
   sttHotkey: 'Alt+Space',
@@ -67,8 +79,49 @@ export const App: React.FC = () => {
     lastActiveTimestamp: new Date().toISOString(),
   });
 
-  const handleUpdateSettings = (newSettings: Partial<UserSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
+  // Load from SQLite database on mount & subscribe to global shortcuts
+  useEffect(() => {
+    async function initDbAndShortcuts() {
+      const dbSettings = await loadPreferencesFromDb(INITIAL_SETTINGS);
+      setSettings(dbSettings);
+
+      const dbHistory = await loadHistoryFromDb(INITIAL_HISTORY);
+      setHistory(dbHistory);
+
+      // Sync hotkeys with Tauri backend
+      await updateBackendHotkeys(dbSettings.sttHotkey, dbSettings.translateHotkey);
+
+      // Calculate initial metrics
+      const totalChars = dbHistory.reduce((acc, curr) => acc + (curr.charCount || curr.sourceText.length), 0);
+      setMetrics((prev) => ({
+        ...prev,
+        totalCharsTranslated: Math.max(prev.totalCharsTranslated, totalChars),
+        totalTranslationsCount: dbHistory.length,
+      }));
+    }
+
+    initDbAndShortcuts();
+
+    // Subscribe to global hotkey triggers
+    const unsubscribe = subscribeToOverlayTriggers(
+      () => setOverlayMode('stt'),
+      () => setOverlayMode('translate')
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const handleUpdateSettings = async (newSettings: Partial<UserSettings>) => {
+    const updated = { ...settings, ...newSettings };
+    setSettings(updated);
+    await savePreferencesToDb(updated);
+
+    // If hotkeys changed, update OS listeners dynamically
+    if (newSettings.sttHotkey || newSettings.translateHotkey) {
+      await updateBackendHotkeys(updated.sttHotkey, updated.translateHotkey);
+    }
   };
 
   const handleExportData = () => {
@@ -88,48 +141,59 @@ export const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleImportData = (jsonData: string) => {
+  const handleImportData = async (jsonData: string) => {
     try {
       const parsed = JSON.parse(jsonData);
-      if (parsed.settings) setSettings(parsed.settings);
-      if (parsed.history) setHistory(parsed.history);
-      if (parsed.metrics) setMetrics(parsed.metrics);
+      if (parsed.settings) {
+        setSettings(parsed.settings);
+        await savePreferencesToDb(parsed.settings);
+        await updateBackendHotkeys(parsed.settings.sttHotkey, parsed.settings.translateHotkey);
+      }
+      if (parsed.history && Array.isArray(parsed.history)) {
+        setHistory(parsed.history);
+        for (const item of parsed.history) {
+          await insertHistoryToDb(item);
+        }
+      }
+      if (parsed.metrics) {
+        setMetrics(parsed.metrics);
+      }
     } catch (e) {
       console.error('Failed to import JSON data:', e);
       throw e;
     }
   };
 
-  const handleGoogleAuth = () => {
-    // Toggle / Initiate OAuth flow
+  const handleGoogleAuth = async () => {
     if (settings.userProfile.isAuthenticated) {
-      setSettings((prev) => ({
-        ...prev,
-        userProfile: {
-          ...prev.userProfile,
-          isAuthenticated: false,
-        },
-      }));
-    } else {
-      // Simulate Google OAuth loopback sign-in
-      const mockOAuth = {
-        name: 'Faizul MD',
-        email: 'faizul@voce.ai',
-        isAuthenticated: true,
+      const updatedProfile = {
+        ...settings.userProfile,
+        isAuthenticated: false,
       };
-      setSettings((prev) => ({
-        ...prev,
-        userProfile: mockOAuth,
-      }));
+      await handleUpdateSettings({ userProfile: updatedProfile });
+    } else {
+      // Execute OAuth loopback flow
+      const profile = await triggerGoogleOAuth();
+      await handleUpdateSettings({ userProfile: profile });
     }
   };
 
-  const handleSaveTranslation = (record: TranslationRecord) => {
+  const handleSaveTranslation = async (record: TranslationRecord) => {
     setHistory((prev) => [record, ...prev]);
+    await insertHistoryToDb(record);
     setMetrics((prev) => ({
       ...prev,
       totalCharsTranslated: prev.totalCharsTranslated + record.charCount,
       totalTranslationsCount: prev.totalTranslationsCount + 1,
+    }));
+  };
+
+  const handleClearHistory = async () => {
+    setHistory([]);
+    await clearHistoryInDb();
+    setMetrics((prev) => ({
+      ...prev,
+      totalTranslationsCount: 0,
     }));
   };
 
@@ -159,7 +223,7 @@ export const App: React.FC = () => {
         {activePage === 'history' && (
           <HistoryPage
             history={history}
-            onClearHistory={() => setHistory([])}
+            onClearHistory={handleClearHistory}
           />
         )}
         {activePage === 'settings' && (

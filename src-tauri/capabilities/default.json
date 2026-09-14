@@ -6,7 +6,16 @@
   "permissions": [
     "core:default",
     "global-shortcut:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered",
     "clipboard-manager:default",
-    "store:default"
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
+    "store:default",
+    "sql:default",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "sql:allow-load"
   ]
 }

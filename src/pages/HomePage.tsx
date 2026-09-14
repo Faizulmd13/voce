@@ -12,8 +12,31 @@ interface HomePageProps {
 export const HomePage: React.FC<HomePageProps> = ({ metrics, settings, onTriggerOverlay }) => {
   return (
     <div className="max-w-5xl mx-auto">
-      {/* Top Header Layout Primitive */}
-      <Header category="Overview" title="Home" />
+      {/* Top Header Layout Primitive with Authenticated User State */}
+      <Header
+        category="Overview"
+        title="Home"
+        action={
+          settings.userProfile.isAuthenticated ? (
+            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 shadow-sm">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <div className="text-right">
+                <span className="text-xs font-medium text-neutral-200 block leading-tight">
+                  {settings.userProfile.name}
+                </span>
+                <span className="text-[10px] font-mono text-neutral-500 block leading-tight">
+                  {settings.userProfile.email}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800">
+              <div className="w-2 h-2 rounded-full bg-neutral-600" />
+              <span className="text-xs font-mono text-neutral-400">Local Anonymous Mode</span>
+            </div>
+          )
+        }
+      />
 
       <div className="space-y-6">
         {/* Status Indicator Area: Clean, explicit in-body container showcasing active system listening/daemon state */}
@@ -23,10 +46,17 @@ export const HomePage: React.FC<HomePageProps> = ({ metrics, settings, onTrigger
               <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse-subtle" />
               <span className="font-mono text-xs uppercase tracking-wider text-neutral-400">System Daemon Status</span>
             </div>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Daemon Active
-            </span>
+            <div className="flex items-center gap-2">
+              {settings.userProfile.isAuthenticated && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  Google Synced
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Daemon Active
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1 border-t border-neutral-800/40">
