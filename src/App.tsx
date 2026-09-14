@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavPage, OverlayMode, TranslationRecord, UserSettings, AppMetrics } from './types';
+import { NavPage, TranslationRecord, UserSettings, AppMetrics } from './types';
 import { Sidebar } from './components/Sidebar';
 import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -15,9 +15,10 @@ import {
 } from './services/db';
 import { 
   triggerGoogleOAuth, 
-  updateBackendHotkeys, 
-  subscribeToOverlayTriggers 
+  updateBackendHotkeys,
+  showOverlay 
 } from './services/tauri';
+import { listen } from '@tauri-apps/api/event';
 
 const INITIAL_SETTINGS: UserSettings = {
   sttHotkey: 'Alt+Space',
@@ -66,8 +67,20 @@ const INITIAL_HISTORY: TranslationRecord[] = [
 ];
 
 export const App: React.FC = () => {
+  const pathname = window.location.pathname;
+
+  // Native Window Route 1: Dictation Overlay (/dictation)
+  if (pathname === '/dictation') {
+    return <DictationOverlay isStandalone={true} autoPaste={true} />;
+  }
+
+  // Native Window Route 2: Translation Overlay (/translation)
+  if (pathname === '/translation') {
+    return <TranslationOverlay isStandalone={true} targetLanguage="English" />;
+  }
+
+  // Main Dashboard Window Route (/)
   const [activePage, setActivePage] = useState<NavPage>('home');
-  const [overlayMode, setOverlayMode] = useState<OverlayMode>('none');
   const [settings, setSettings] = useState<UserSettings>(INITIAL_SETTINGS);
   const [history, setHistory] = useState<TranslationRecord[]>(INITIAL_HISTORY);
   const [metrics, setMetrics] = useState<AppMetrics>({
@@ -79,7 +92,6 @@ export const App: React.FC = () => {
     lastActiveTimestamp: new Date().toISOString(),
   });
 
-  // Load from SQLite database on mount & subscribe to global shortcuts
   useEffect(() => {
     async function initDbAndShortcuts() {
       const dbSettings = await loadPreferencesFromDb(INITIAL_SETTINGS);
@@ -88,10 +100,8 @@ export const App: React.FC = () => {
       const dbHistory = await loadHistoryFromDb(INITIAL_HISTORY);
       setHistory(dbHistory);
 
-      // Sync hotkeys with Tauri backend
       await updateBackendHotkeys(dbSettings.sttHotkey, dbSettings.translateHotkey);
 
-      // Calculate initial metrics
       const totalChars = dbHistory.reduce((acc, curr) => acc + (curr.charCount || curr.sourceText.length), 0);
       setMetrics((prev) => ({
         ...prev,
@@ -102,14 +112,20 @@ export const App: React.FC = () => {
 
     initDbAndShortcuts();
 
-    // Subscribe to global hotkey triggers
-    const unsubscribe = subscribeToOverlayTriggers(
-      () => setOverlayMode('stt'),
-      () => setOverlayMode('translate')
-    );
+    // Listen for transcription completed events to update metrics & history
+    const unlistenPromise = listen<{ text: string }>('transcription-completed', (event) => {
+      if (event.payload?.text) {
+        const words = event.payload.text.split(/\s+/).filter(Boolean).length;
+        setMetrics((prev) => ({
+          ...prev,
+          totalWordsDictated: prev.totalWordsDictated + words,
+          totalDictationsCount: prev.totalDictationsCount + 1,
+        }));
+      }
+    });
 
     return () => {
-      unsubscribe();
+      unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 
@@ -118,7 +134,6 @@ export const App: React.FC = () => {
     setSettings(updated);
     await savePreferencesToDb(updated);
 
-    // If hotkeys changed, update OS listeners dynamically
     if (newSettings.sttHotkey || newSettings.translateHotkey) {
       await updateBackendHotkeys(updated.sttHotkey, updated.translateHotkey);
     }
@@ -172,20 +187,9 @@ export const App: React.FC = () => {
       };
       await handleUpdateSettings({ userProfile: updatedProfile });
     } else {
-      // Execute OAuth loopback flow
       const profile = await triggerGoogleOAuth();
       await handleUpdateSettings({ userProfile: profile });
     }
-  };
-
-  const handleSaveTranslation = async (record: TranslationRecord) => {
-    setHistory((prev) => [record, ...prev]);
-    await insertHistoryToDb(record);
-    setMetrics((prev) => ({
-      ...prev,
-      totalCharsTranslated: prev.totalCharsTranslated + record.charCount,
-      totalTranslationsCount: prev.totalTranslationsCount + 1,
-    }));
   };
 
   const handleClearHistory = async () => {
@@ -197,13 +201,12 @@ export const App: React.FC = () => {
     }));
   };
 
-  const handleTranscriptionComplete = (text: string) => {
-    const words = text.split(/\s+/).filter(Boolean).length;
-    setMetrics((prev) => ({
-      ...prev,
-      totalWordsDictated: prev.totalWordsDictated + words,
-      totalDictationsCount: prev.totalDictationsCount + 1,
-    }));
+  const handleTriggerNativeOverlay = async (mode: 'stt' | 'translate') => {
+    if (mode === 'stt') {
+      await showOverlay('stt-overlay', 20);
+    } else {
+      await showOverlay('translate-overlay', 20);
+    }
   };
 
   return (
@@ -217,7 +220,11 @@ export const App: React.FC = () => {
           <HomePage
             metrics={metrics}
             settings={settings}
-            onTriggerOverlay={(mode) => setOverlayMode(mode)}
+            onTriggerOverlay={(mode) => {
+              if (mode === 'stt' || mode === 'translate') {
+                handleTriggerNativeOverlay(mode);
+              }
+            }}
           />
         )}
         {activePage === 'history' && (
@@ -236,21 +243,6 @@ export const App: React.FC = () => {
           />
         )}
       </main>
-
-      {/* Ephemeral HUD Overlays */}
-      <DictationOverlay
-        isOpen={overlayMode === 'stt'}
-        onClose={() => setOverlayMode('none')}
-        onTranscriptionComplete={handleTranscriptionComplete}
-        autoPaste={settings.autoPasteToCursor}
-      />
-
-      <TranslationOverlay
-        isOpen={overlayMode === 'translate'}
-        onClose={() => setOverlayMode('none')}
-        targetLanguage={settings.targetLanguage}
-        onSaveTranslation={handleSaveTranslation}
-      />
     </div>
   );
 };

@@ -12,16 +12,48 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Voce",
-        "width": 1080,
-        "height": 720,
-        "minWidth": 900,
-        "minHeight": 600,
+        "url": "/",
+        "width": 800,
+        "height": 600,
+        "minWidth": 700,
+        "minHeight": 500,
+        "hiddenTitle": true,
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
         "transparent": false,
-        "theme": "Dark"
+        "theme": "Dark",
+        "visible": true
+      },
+      {
+        "label": "stt-overlay",
+        "title": "Voce Dictation",
+        "url": "/dictation",
+        "width": 350,
+        "height": 80,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "resizable": false,
+        "shadow": false
+      },
+      {
+        "label": "translate-overlay",
+        "title": "Voce Translation",
+        "url": "/translation",
+        "width": 400,
+        "height": 250,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "resizable": false,
+        "shadow": false
       }
     ],
     "security": {

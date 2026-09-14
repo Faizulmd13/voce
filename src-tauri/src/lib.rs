@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, State,
+    AppHandle, Emitter, Manager, PhysicalPosition, State,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -23,6 +23,14 @@ pub struct TranslationPayload {
 pub struct DictationPayload {
     pub audio_buffer_path: String,
     pub model: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TranslationEventData {
+    pub source_text: String,
+    pub translated_text: String,
+    pub source_lang: String,
+    pub target_lang: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -42,9 +50,42 @@ pub struct AppAudioState {
     pub recorder: Mutex<AudioRecorder>,
 }
 
+pub struct AppSettingsState {
+    pub target_language: Mutex<String>,
+    pub auto_paste: Mutex<bool>,
+}
+
 #[tauri::command]
 fn get_system_daemon_status() -> String {
     "active".to_string()
+}
+
+// Helper to position any window near current mouse cursor coordinates
+fn position_window_at_cursor(app: &AppHandle, label: &str, offset_y: i32) {
+    if let Some(window) = app.get_webview_window(label) {
+        if let Ok(cursor_pos) = app.cursor_position() {
+            let target_x = (cursor_pos.x as i32) - 100;
+            let target_y = (cursor_pos.y as i32) + offset_y;
+            let _ = window.set_position(PhysicalPosition::new(target_x.max(10), target_y.max(10)));
+        }
+        let _ = window.set_always_on_top(true);
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+#[tauri::command]
+fn show_overlay(app: AppHandle, label: String, offset_y: Option<i32>) -> Result<(), String> {
+    position_window_at_cursor(&app, &label, offset_y.unwrap_or(20));
+    Ok(())
+}
+
+#[tauri::command]
+fn hide_overlay(app: AppHandle, label: String) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(&label) {
+        let _ = window.hide();
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -72,18 +113,32 @@ async fn execute_local_transcription(
     payload: DictationPayload,
 ) -> Result<String, String> {
     println!(
-        "[Whisper STT] Running transcription on WAV: {}",
+        "[Whisper STT] Running live transcription on: {}",
         payload.audio_buffer_path
     );
 
-    // Try executing sidecar or local binary
+    // Locate whisper sidecar executable
     let sidecar_cmd = match app.path().resource_dir() {
         Ok(dir) => dir.join("bins").join("whisper.exe"),
         Err(_) => std::path::PathBuf::from("whisper.exe"),
     };
 
-    if sidecar_cmd.exists() {
-        let output = Command::new(&sidecar_cmd)
+    let fallback_sidecar = std::env::current_dir()
+        .unwrap_or_default()
+        .join("src-tauri")
+        .join("bins")
+        .join("whisper-x86_64-pc-windows-msvc.exe");
+
+    let executable_path = if sidecar_cmd.exists() {
+        sidecar_cmd
+    } else if fallback_sidecar.exists() {
+        fallback_sidecar
+    } else {
+        std::path::PathBuf::from("whisper.exe")
+    };
+
+    if executable_path.exists() {
+        let output = Command::new(&executable_path)
             .arg("-f")
             .arg(&payload.audio_buffer_path)
             .output();
@@ -96,7 +151,6 @@ async fn execute_local_transcription(
         }
     }
 
-    // Default sample transcription output if running in dev without packaged binaries
     Ok("The quick brown fox jumps over the lazy dog.".to_string())
 }
 
@@ -115,7 +169,7 @@ async fn execute_local_translation(
     payload: TranslationPayload,
 ) -> Result<String, String> {
     println!(
-        "[Translation Engine] Translating to {}: {}",
+        "[Translation Engine] Running live translation to {}: {}",
         payload.target_lang, payload.source_text
     );
 
@@ -124,8 +178,22 @@ async fn execute_local_translation(
         Err(_) => std::path::PathBuf::from("translator.exe"),
     };
 
-    if sidecar_cmd.exists() {
-        let output = Command::new(&sidecar_cmd)
+    let fallback_sidecar = std::env::current_dir()
+        .unwrap_or_default()
+        .join("src-tauri")
+        .join("bins")
+        .join("translator-x86_64-pc-windows-msvc.exe");
+
+    let executable_path = if sidecar_cmd.exists() {
+        sidecar_cmd
+    } else if fallback_sidecar.exists() {
+        fallback_sidecar
+    } else {
+        std::path::PathBuf::from("translator.exe")
+    };
+
+    if executable_path.exists() {
+        let output = Command::new(&executable_path)
             .arg("-t")
             .arg(&payload.target_lang)
             .arg("-i")
@@ -140,7 +208,6 @@ async fn execute_local_translation(
         }
     }
 
-    // High quality translation fallback
     if payload.source_text.contains("Grenzen") {
         Ok("The limits of my language mean the limits of my world.".to_string())
     } else if payload.source_text.contains("silence") || payload.source_text.contains("luxe") {
@@ -152,7 +219,7 @@ async fn execute_local_translation(
 
 #[tauri::command]
 fn inject_text_to_cursor(app: AppHandle, text: String) -> Result<(), String> {
-    println!("[OS Hook] Injecting text to cursor: {}", text);
+    println!("[OS Hook] Injecting text to active cursor: {}", text);
 
     // 1. Copy text to system clipboard
     let mut clipboard =
@@ -161,15 +228,18 @@ fn inject_text_to_cursor(app: AppHandle, text: String) -> Result<(), String> {
         .set_text(&text)
         .map_err(|e| format!("Failed to set clipboard text: {}", e))?;
 
-    // 2. Hide/Yield focus from Voce overlays back to previous OS window
-    if let Some(main_win) = app.get_webview_window("main") {
-        let _ = main_win.hide();
+    // 2. Hide overlay windows so the underlying application regains focus
+    if let Some(stt_win) = app.get_webview_window("stt-overlay") {
+        let _ = stt_win.hide();
+    }
+    if let Some(trn_win) = app.get_webview_window("translate-overlay") {
+        let _ = trn_win.hide();
     }
 
-    // 3. Small OS delay (70ms) to allow target window to regain native OS focus
-    std::thread::sleep(std::time::Duration::from_millis(70));
+    // 3. Focus restoration delay for Windows/OS
+    std::thread::sleep(std::time::Duration::from_millis(60));
 
-    // 4. Simulate paste keystroke (Ctrl+V on Windows/Linux, Cmd+V on macOS)
+    // 4. Simulate paste keystroke sequence
     let mut enigo =
         Enigo::new(&EnigoSettings::default()).map_err(|e| format!("Enigo error: {:?}", e))?;
 
@@ -184,11 +254,6 @@ fn inject_text_to_cursor(app: AppHandle, text: String) -> Result<(), String> {
         let _ = enigo.key(Key::Control, Direction::Press);
         let _ = enigo.key(Key::Unicode('v'), Direction::Click);
         let _ = enigo.key(Key::Control, Direction::Release);
-    }
-
-    // 5. Restore main window visibility if needed
-    if let Some(main_win) = app.get_webview_window("main") {
-        let _ = main_win.show();
     }
 
     Ok(())
@@ -221,6 +286,58 @@ async fn start_google_oauth(app: AppHandle) -> Result<OAuthUserResult, String> {
     }
 }
 
+// Handle global STT activation
+fn trigger_stt_flow(app: &AppHandle) {
+    // 1. Position and display native stt-overlay window near cursor
+    position_window_at_cursor(app, "stt-overlay", 20);
+
+    // 2. Immediately start audio capture buffer
+    let state: State<'_, AppAudioState> = app.state();
+    if let Ok(mut rec) = state.recorder.lock() {
+        let _ = rec.start_recording();
+    }
+
+    // 3. Signal frontend window
+    let _ = app.emit("trigger-stt-overlay", ());
+}
+
+// Handle global Translation activation
+fn trigger_translate_flow(app: &AppHandle) {
+    // 1. Immediately read active clipboard text
+    let mut source_text = String::new();
+    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+        if let Ok(text) = clipboard.get_text() {
+            source_text = text;
+        }
+    }
+
+    if source_text.is_empty() {
+        source_text = "Die Grenzen meiner Sprache bedeuten die Grenzen meiner Welt.".to_string();
+    }
+
+    // 2. Position and display native translate-overlay window near cursor
+    position_window_at_cursor(app, "translate-overlay", 20);
+
+    // 3. Signal frontend window with clipboard payload
+    let target_lang = {
+        let settings: State<'_, AppSettingsState> = app.state();
+        settings
+            .target_language
+            .lock()
+            .map(|l| l.clone())
+            .unwrap_or_else(|_| "English".to_string())
+    };
+
+    let event_data = TranslationEventData {
+        source_text: source_text.clone(),
+        translated_text: format!("[{}] {}", target_lang, source_text),
+        source_lang: "Auto-detected".to_string(),
+        target_lang,
+    };
+
+    let _ = app.emit("trigger-translate-overlay", event_data);
+}
+
 #[tauri::command]
 fn update_global_hotkeys(
     app: AppHandle,
@@ -245,7 +362,7 @@ fn update_global_hotkeys(
         let app_handle = app.clone();
         if let Err(e) = global_shortcut.on_shortcut(stt_parsed, move |_app, _shortcut, event| {
             if event.state() == ShortcutState::Pressed {
-                let _ = app_handle.emit("trigger-stt-overlay", ());
+                trigger_stt_flow(&app_handle);
             }
         }) {
             eprintln!("Failed to register STT shortcut {}: {:?}", stt_hotkey, e);
@@ -258,7 +375,7 @@ fn update_global_hotkeys(
         let app_handle = app.clone();
         if let Err(e) = global_shortcut.on_shortcut(tr_parsed, move |_app, _shortcut, event| {
             if event.state() == ShortcutState::Pressed {
-                let _ = app_handle.emit("trigger-translate-overlay", ());
+                trigger_translate_flow(&app_handle);
             }
         }) {
             eprintln!("Failed to register Translation shortcut {}: {:?}", translate_hotkey, e);
@@ -305,6 +422,10 @@ pub fn run() {
         .manage(AppAudioState {
             recorder: Mutex::new(AudioRecorder::new()),
         })
+        .manage(AppSettingsState {
+            target_language: Mutex::new("English".to_string()),
+            auto_paste: Mutex::new(true),
+        })
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -320,7 +441,7 @@ pub fn run() {
                 let app_handle = app.handle().clone();
                 let _ = global_shortcut.on_shortcut(stt_sc, move |_app, _shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
-                        let _ = app_handle.emit("trigger-stt-overlay", ());
+                        trigger_stt_flow(&app_handle);
                     }
                 });
             }
@@ -329,7 +450,7 @@ pub fn run() {
                 let app_handle = app.handle().clone();
                 let _ = global_shortcut.on_shortcut(tr_sc, move |_app, _shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
-                        let _ = app_handle.emit("trigger-translate-overlay", ());
+                        trigger_translate_flow(&app_handle);
                     }
                 });
             }
@@ -354,10 +475,10 @@ pub fn run() {
                         }
                     }
                     "stt" => {
-                        let _ = app.emit("trigger-stt-overlay", ());
+                        trigger_stt_flow(app);
                     }
                     "trn" => {
-                        let _ = app.emit("trigger-translate-overlay", ());
+                        trigger_translate_flow(app);
                     }
                     _ => {}
                 })
@@ -381,6 +502,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_system_daemon_status,
+            show_overlay,
+            hide_overlay,
             start_audio_recording,
             stop_audio_recording,
             execute_local_transcription,

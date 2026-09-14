@@ -127,3 +127,19 @@ export async function injectTextToCursor(text: string): Promise<void> {
     console.warn('Tauri inject text to cursor failed:', e);
   }
 }
+
+export async function showOverlay(label: 'stt-overlay' | 'translate-overlay', offsetY?: number): Promise<void> {
+  try {
+    await invoke('show_overlay', { label, offset_y: offsetY });
+  } catch (e) {
+    console.warn('Failed to show overlay:', e);
+  }
+}
+
+export async function hideOverlay(label: 'stt-overlay' | 'translate-overlay'): Promise<void> {
+  try {
+    await invoke('hide_overlay', { label });
+  } catch (e) {
+    console.warn('Failed to hide overlay:', e);
+  }
+}
