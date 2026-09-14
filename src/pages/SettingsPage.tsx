@@ -191,14 +191,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             onChange={(e) => onUpdateSettings({ targetLanguage: e.target.value })}
             className="bg-neutral-950 border border-neutral-800 text-neutral-200 text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-neutral-700"
           >
-            <option value="English">English (en)</option>
-            <option value="Spanish">Spanish (es)</option>
-            <option value="French">French (fr)</option>
-            <option value="German">German (de)</option>
-            <option value="Japanese">Japanese (ja)</option>
-            <option value="Chinese (Simplified)">Chinese Simplified (zh)</option>
-            <option value="Arabic">Arabic (ar)</option>
-            <option value="Hindi">Hindi (hi)</option>
+            <option value="English">English (eng_Latn)</option>
+            <option value="Spanish">Spanish (spa_Latn)</option>
+            <option value="French">French (fra_Latn)</option>
+            <option value="German">German (deu_Latn)</option>
+            <option value="Tamil">Tamil (tam_Taml)</option>
+            <option value="Hindi">Hindi (hin_Deva)</option>
+            <option value="Japanese">Japanese (jpn_Jpan)</option>
+            <option value="Chinese (Simplified)">Chinese Simplified (zho_Hans)</option>
+            <option value="Arabic">Arabic (ara_Arab)</option>
+            <option value="Russian">Russian (rus_Cyrl)</option>
+            <option value="Italian">Italian (ita_Latn)</option>
+            <option value="Portuguese">Portuguese (por_Latn)</option>
           </select>
         </div>
 

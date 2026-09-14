@@ -5,6 +5,7 @@ use enigo::{Direction, Enigo, Key, Keyboard, Settings as EnigoSettings};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -58,6 +59,97 @@ pub struct AppSettingsState {
 #[tauri::command]
 fn get_system_daemon_status() -> String {
     "active".to_string()
+}
+
+/// Helper to resolve cross-platform sidecar binary paths in dev & packaged production
+fn get_sidecar_path(app: &AppHandle, binary_name: &str) -> std::path::PathBuf {
+    // 1. Check bundled resource directory (Tauri production bundle)
+    if let Ok(res_dir) = app.path().resource_dir() {
+        let bin_res = res_dir.join("bins").join(format!("{}.exe", binary_name));
+        if bin_res.exists() {
+            return bin_res;
+        }
+        let bin_root = res_dir.join(format!("{}.exe", binary_name));
+        if bin_root.exists() {
+            return bin_root;
+        }
+    }
+
+    // 2. Check next to running executable
+    if let Ok(curr_exe) = std::env::current_exe() {
+        if let Some(parent) = curr_exe.parent() {
+            let p1 = parent.join(format!("{}.exe", binary_name));
+            if p1.exists() {
+                return p1;
+            }
+            let p2 = parent.join(format!("{}-x86_64-pc-windows-msvc.exe", binary_name));
+            if p2.exists() {
+                return p2;
+            }
+        }
+    }
+
+    // 3. Check dev workspace directories
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let dev_bin1 = cwd
+        .join("src-tauri")
+        .join("bins")
+        .join(format!("{}-x86_64-pc-windows-msvc.exe", binary_name));
+    if dev_bin1.exists() {
+        return dev_bin1;
+    }
+    let dev_bin2 = cwd
+        .join("bins")
+        .join(format!("{}-x86_64-pc-windows-msvc.exe", binary_name));
+    if dev_bin2.exists() {
+        return dev_bin2;
+    }
+
+    // 4. Check cargo target/debug directory
+    let target_bin = cwd
+        .join("src-tauri")
+        .join("target")
+        .join("debug")
+        .join(format!("{}.exe", binary_name));
+    if target_bin.exists() {
+        return target_bin;
+    }
+
+    std::path::PathBuf::from(format!("{}.exe", binary_name))
+}
+
+/// FLORES-200 / NLLB-200 language code normalizer
+pub fn map_to_nllb_lang_code(lang: &str) -> &'static str {
+    let lower = lang.trim().to_lowercase();
+    match lower.as_str() {
+        "english" | "en" | "eng" | "eng_latn" => "eng_Latn",
+        "spanish" | "es" | "spa" | "spa_latn" => "spa_Latn",
+        "french" | "fr" | "fra" | "fra_latn" => "fra_Latn",
+        "german" | "de" | "deu" | "deu_latn" => "deu_Latn",
+        "tamil" | "ta" | "tam" | "tam_taml" => "tam_Taml",
+        "hindi" | "hi" | "hin" | "hin_deva" => "hin_Deva",
+        "japanese" | "ja" | "jpn" | "jpn_jpan" => "jpn_Jpan",
+        "chinese" | "chinese (simplified)" | "chinese simplified" | "zh" | "zho" | "zho_hans" => "zho_Hans",
+        "chinese (traditional)" | "chinese traditional" | "zho_hant" => "zho_Hant",
+        "arabic" | "ar" | "ara" | "ara_arab" => "ara_Arab",
+        "russian" | "ru" | "rus" | "rus_cyrl" => "rus_Cyrl",
+        "italian" | "it" | "ita" | "ita_latn" => "ita_Latn",
+        "portuguese" | "pt" | "por" | "por_latn" => "por_Latn",
+        "dutch" | "nl" | "nld" | "nld_latn" => "nld_Latn",
+        "korean" | "ko" | "kor" | "kor_hang" => "kor_Hang",
+        "turkish" | "tr" | "tur" | "tur_latn" => "tur_Latn",
+        "polish" | "pl" | "pol" | "pol_latn" => "pol_Latn",
+        "vietnamese" | "vi" | "vie" | "vie_latn" => "vie_Latn",
+        "indonesian" | "id" | "ind" | "ind_latn" => "ind_Latn",
+        "bengali" | "bn" | "ben" | "ben_beng" => "ben_Beng",
+        "telugu" | "te" | "tel" | "tel_telu" => "tel_Telu",
+        "marathi" | "mr" | "mar" | "mar_deva" => "mar_Deva",
+        "urdu" | "ur" | "urd" | "urd_arab" => "urd_Arab",
+        "gujarati" | "gu" | "guj" | "guj_gujr" => "guj_Gujr",
+        "ukrainian" | "uk" | "ukr" | "ukr_cyrl" => "ukr_Cyrl",
+        "swedish" | "sv" | "swe" | "swe_latn" => "swe_Latn",
+        _ => "eng_Latn",
+    }
 }
 
 // Smart Screen Boundary Detection & Cursor Placement
@@ -154,45 +246,66 @@ async fn execute_local_transcription(
     app: AppHandle,
     payload: DictationPayload,
 ) -> Result<String, String> {
+    let wav_path = payload.audio_buffer_path.clone();
     println!(
         "[Whisper STT] Executing live transcription on WAV buffer: {}",
-        payload.audio_buffer_path
+        wav_path
     );
 
-    let sidecar_cmd = match app.path().resource_dir() {
-        Ok(dir) => dir.join("bins").join("whisper.exe"),
-        Err(_) => std::path::PathBuf::from("whisper.exe"),
-    };
+    let executable_path = get_sidecar_path(&app, "whisper");
+    if !executable_path.exists() {
+        return Err(format!(
+            "Whisper sidecar binary not found at {:?}",
+            executable_path
+        ));
+    }
 
-    let fallback_sidecar = std::env::current_dir()
-        .unwrap_or_default()
-        .join("src-tauri")
-        .join("bins")
-        .join("whisper-x86_64-pc-windows-msvc.exe");
-
-    let executable_path = if sidecar_cmd.exists() {
-        sidecar_cmd
-    } else if fallback_sidecar.exists() {
-        fallback_sidecar
-    } else {
-        std::path::PathBuf::from("whisper.exe")
-    };
-
-    if executable_path.exists() {
-        let output = Command::new(&executable_path)
-            .arg("-f")
-            .arg(&payload.audio_buffer_path)
-            .output();
-
-        if let Ok(out) = output {
-            let res = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !res.is_empty() {
-                return Ok(res);
-            }
+    // Locate whisper model ggml-base.en.bin if present
+    let mut model_path = std::path::PathBuf::new();
+    if let Ok(res_dir) = app.path().resource_dir() {
+        let m = res_dir.join("models").join("ggml-base.en.bin");
+        if m.exists() {
+            model_path = m;
+        }
+    }
+    if !model_path.exists() {
+        let m = std::env::current_dir()
+            .unwrap_or_default()
+            .join("src-tauri")
+            .join("models")
+            .join("ggml-base.en.bin");
+        if m.exists() {
+            model_path = m;
         }
     }
 
-    Ok("Dictation transcribed live via whisper.cpp.".to_string())
+    let output = tokio::task::spawn_blocking(move || {
+        let mut cmd = Command::new(&executable_path);
+        cmd.arg("-f").arg(&wav_path);
+        if model_path.exists() {
+            cmd.arg("-m").arg(&model_path);
+        }
+        cmd.output()
+    })
+    .await
+    .map_err(|e| format!("Task execution error: {}", e))?
+    .map_err(|e| format!("Failed to execute whisper sidecar: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(format!("Whisper sidecar error: {}", stderr));
+    }
+
+    let res = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if res.is_empty() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if !stderr.is_empty() {
+            return Err(format!("Whisper error: {}", stderr));
+        }
+        return Err("Whisper sidecar returned empty transcript".to_string());
+    }
+
+    Ok(res)
 }
 
 #[tauri::command]
@@ -209,52 +322,73 @@ async fn execute_local_translation(
     app: AppHandle,
     payload: TranslationPayload,
 ) -> Result<String, String> {
-    let text = payload.source_text.trim();
+    let text = payload.source_text.trim().to_string();
     if text.is_empty() {
         return Ok(String::new());
     }
 
+    let nllb_target_code = map_to_nllb_lang_code(&payload.target_lang);
     println!(
-        "[Translation Engine] Translating into {}: {}",
-        payload.target_lang, text
+        "[Translation Engine] Translating into {} (token: {}): {}",
+        payload.target_lang, nllb_target_code, text
     );
 
-    let sidecar_cmd = match app.path().resource_dir() {
-        Ok(dir) => dir.join("bins").join("translator.exe"),
-        Err(_) => std::path::PathBuf::from("translator.exe"),
-    };
+    let executable_path = get_sidecar_path(&app, "translator");
+    if !executable_path.exists() {
+        return Err(format!(
+            "Translator sidecar binary not found at {:?}",
+            executable_path
+        ));
+    }
 
-    let fallback_sidecar = std::env::current_dir()
-        .unwrap_or_default()
-        .join("src-tauri")
-        .join("bins")
-        .join("translator-x86_64-pc-windows-msvc.exe");
-
-    let executable_path = if sidecar_cmd.exists() {
-        sidecar_cmd
-    } else if fallback_sidecar.exists() {
-        fallback_sidecar
-    } else {
-        std::path::PathBuf::from("translator.exe")
-    };
-
-    if executable_path.exists() {
-        let output = Command::new(&executable_path)
-            .arg("-t")
-            .arg(&payload.target_lang)
-            .arg("-i")
-            .arg(text)
-            .output();
-
-        if let Ok(out) = output {
-            let res = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !res.is_empty() {
-                return Ok(res);
-            }
+    // Locate models/nllb-200 directory if present
+    let mut model_dir = std::path::PathBuf::new();
+    if let Ok(res_dir) = app.path().resource_dir() {
+        let m = res_dir.join("models").join("nllb-200");
+        if m.exists() {
+            model_dir = m;
+        }
+    }
+    if !model_dir.exists() {
+        let m = std::env::current_dir()
+            .unwrap_or_default()
+            .join("src-tauri")
+            .join("models")
+            .join("nllb-200");
+        if m.exists() {
+            model_dir = m;
         }
     }
 
-    Ok(text.to_string())
+    let target_token = nllb_target_code.to_string();
+    let output = tokio::task::spawn_blocking(move || {
+        let mut cmd = Command::new(&executable_path);
+        cmd.arg("-t").arg(&target_token);
+        cmd.arg("-i").arg(&text);
+        if model_dir.exists() {
+            cmd.arg("-m").arg(&model_dir);
+        }
+        cmd.output()
+    })
+    .await
+    .map_err(|e| format!("Task execution error: {}", e))?
+    .map_err(|e| format!("Failed to execute translator sidecar: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(format!("Translator sidecar error: {}", stderr));
+    }
+
+    let res = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if res.is_empty() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if !stderr.is_empty() {
+            return Err(format!("Translator error: {}", stderr));
+        }
+        return Err("Translator sidecar returned empty result".to_string());
+    }
+
+    Ok(res)
 }
 
 #[tauri::command]
@@ -275,7 +409,7 @@ fn inject_text_to_cursor(app: AppHandle, text: String) -> Result<(), String> {
     }
 
     // Yield OS window focus back to the active underlying app
-    std::thread::sleep(std::time::Duration::from_millis(60));
+    std::thread::sleep(Duration::from_millis(60));
 
     let mut enigo =
         Enigo::new(&EnigoSettings::default()).map_err(|e| format!("Enigo error: {:?}", e))?;
@@ -335,8 +469,28 @@ fn trigger_stt_flow(app: &AppHandle) {
     let _ = app.emit("trigger-stt-overlay", ());
 }
 
-// Handle global Translation activation
+// Handle global Translation activation: copies highlighted text via Ctrl+C, sleeps 100ms, reads clipboard
 fn trigger_translate_flow(app: &AppHandle) {
+    // 1. Simulate copy keystroke (Ctrl+C / Cmd+C) to capture highlighted text into OS clipboard
+    if let Ok(mut enigo) = Enigo::new(&EnigoSettings::default()) {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = enigo.key(Key::Meta, Direction::Press);
+            let _ = enigo.key(Key::Unicode('c'), Direction::Click);
+            let _ = enigo.key(Key::Meta, Direction::Release);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = enigo.key(Key::Control, Direction::Press);
+            let _ = enigo.key(Key::Unicode('c'), Direction::Click);
+            let _ = enigo.key(Key::Control, Direction::Release);
+        }
+    }
+
+    // 2. Allow OS clipboard to populate
+    std::thread::sleep(Duration::from_millis(100));
+
+    // 3. Read OS clipboard via arboard
     let mut source_text = String::new();
     if let Ok(mut clipboard) = arboard::Clipboard::new() {
         if let Ok(text) = clipboard.get_text() {
@@ -344,6 +498,7 @@ fn trigger_translate_flow(app: &AppHandle) {
         }
     }
 
+    // 4. Show and position translation overlay
     position_window_at_cursor(app, "translate-overlay", 20);
 
     let target_lang = {

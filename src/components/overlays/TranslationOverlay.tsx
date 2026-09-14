@@ -168,12 +168,18 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
                 onChange={(e) => handleTargetLangChange(e.target.value)}
                 className="bg-neutral-950 border border-neutral-800 text-emerald-400 text-[10px] font-mono rounded px-1.5 py-0.5 focus:outline-none"
               >
-                <option value="English">English</option>
-                <option value="Spanish">Spanish</option>
-                <option value="French">French</option>
-                <option value="German">German</option>
-                <option value="Japanese">Japanese</option>
-                <option value="Chinese (Simplified)">Chinese (Simplified)</option>
+                <option value="English">English (eng_Latn)</option>
+                <option value="Spanish">Spanish (spa_Latn)</option>
+                <option value="French">French (fra_Latn)</option>
+                <option value="German">German (deu_Latn)</option>
+                <option value="Tamil">Tamil (tam_Taml)</option>
+                <option value="Hindi">Hindi (hin_Deva)</option>
+                <option value="Japanese">Japanese (jpn_Jpan)</option>
+                <option value="Chinese (Simplified)">Chinese (zho_Hans)</option>
+                <option value="Arabic">Arabic (ara_Arab)</option>
+                <option value="Russian">Russian (rus_Cyrl)</option>
+                <option value="Italian">Italian (ita_Latn)</option>
+                <option value="Portuguese">Portuguese (por_Latn)</option>
               </select>
             </div>
             <button
