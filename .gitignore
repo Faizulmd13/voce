@@ -17,6 +17,9 @@ dist-ssr
 src-tauri/target
 src-tauri/gen
 *.pdb
+src-tauri/models/*.bin
+src-tauri/models/*.gguf
+src-tauri/models/nllb-200/
 
 # Editor directories and files
 .vscode/*
