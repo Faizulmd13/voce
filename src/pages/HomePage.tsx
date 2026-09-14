@@ -1,0 +1,170 @@
+import React from 'react';
+import { Header } from '../components/Header';
+import { AppMetrics, UserSettings, OverlayMode } from '../types';
+import { Activity, Mic, Languages, CheckCircle2, ShieldCheck, Cpu, Play } from 'lucide-react';
+
+interface HomePageProps {
+  metrics: AppMetrics;
+  settings: UserSettings;
+  onTriggerOverlay: (mode: OverlayMode) => void;
+}
+
+export const HomePage: React.FC<HomePageProps> = ({ metrics, settings, onTriggerOverlay }) => {
+  return (
+    <div className="max-w-5xl mx-auto">
+      {/* Top Header Layout Primitive */}
+      <Header category="Overview" title="Home" />
+
+      <div className="space-y-6">
+        {/* Status Indicator Area: Clean, explicit in-body container showcasing active system listening/daemon state */}
+        <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse-subtle" />
+              <span className="font-mono text-xs uppercase tracking-wider text-neutral-400">System Daemon Status</span>
+            </div>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Daemon Active
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1 border-t border-neutral-800/40">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-neutral-950/60 border border-neutral-800/40">
+              <Cpu className="w-4 h-4 text-emerald-500 mt-0.5" />
+              <div>
+                <span className="text-[11px] font-mono uppercase text-neutral-500 block">STT Engine</span>
+                <span className="text-sm font-medium text-neutral-200">whisper.cpp (Local)</span>
+                <span className="text-[11px] text-neutral-500 block mt-0.5">Model: {settings.whisperModel}</span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-neutral-950/60 border border-neutral-800/40">
+              <Languages className="w-4 h-4 text-emerald-500 mt-0.5" />
+              <div>
+                <span className="text-[11px] font-mono uppercase text-neutral-500 block">Translation Engine</span>
+                <span className="text-sm font-medium text-neutral-200">CTranslate2 (Local)</span>
+                <span className="text-[11px] text-neutral-500 block mt-0.5">Target: {settings.targetLanguage}</span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-neutral-950/60 border border-neutral-800/40">
+              <ShieldCheck className="w-4 h-4 text-emerald-500 mt-0.5" />
+              <div>
+                <span className="text-[11px] font-mono uppercase text-neutral-500 block">Privacy Guard</span>
+                <span className="text-sm font-medium text-emerald-400">100% Offline Core</span>
+                <span className="text-[11px] text-neutral-500 block mt-0.5">Zero cloud telemetry</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Metric Analytics Display: Unified layout rows showing high-contrast, beautiful typography */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Total Words Dictated */}
+          <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-5 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-mono uppercase tracking-widest text-neutral-500">
+                Total Words Dictated
+              </span>
+              <Mic className="w-4 h-4 text-neutral-500" />
+            </div>
+            <div className="my-3">
+              <div className="text-4xl font-mono font-bold tracking-tight text-neutral-100">
+                {metrics.totalWordsDictated.toLocaleString()}
+              </div>
+              <p className="text-xs text-neutral-500 font-mono mt-1">
+                Across {metrics.totalDictationsCount} dictation sessions
+              </p>
+            </div>
+            <div className="pt-3 border-t border-neutral-800/40 flex items-center justify-between text-xs">
+              <span className="text-neutral-500 font-mono">Hotkey: <code className="text-emerald-400 bg-neutral-950 px-1.5 py-0.5 rounded border border-neutral-800">{settings.sttHotkey}</code></span>
+              <button
+                onClick={() => onTriggerOverlay('stt')}
+                className="inline-flex items-center gap-1.5 text-neutral-300 hover:text-emerald-400 font-medium transition-colors"
+              >
+                <Play className="w-3 h-3" />
+                Test Overlay
+              </button>
+            </div>
+          </div>
+
+          {/* Total Characters Translated */}
+          <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-5 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-mono uppercase tracking-widest text-neutral-500">
+                Total Characters Translated
+              </span>
+              <Languages className="w-4 h-4 text-neutral-500" />
+            </div>
+            <div className="my-3">
+              <div className="text-4xl font-mono font-bold tracking-tight text-neutral-100">
+                {metrics.totalCharsTranslated.toLocaleString()}
+              </div>
+              <p className="text-xs text-neutral-500 font-mono mt-1">
+                Across {metrics.totalTranslationsCount} translation events
+              </p>
+            </div>
+            <div className="pt-3 border-t border-neutral-800/40 flex items-center justify-between text-xs">
+              <span className="text-neutral-500 font-mono">Hotkey: <code className="text-emerald-400 bg-neutral-950 px-1.5 py-0.5 rounded border border-neutral-800">{settings.translateHotkey}</code></span>
+              <button
+                onClick={() => onTriggerOverlay('translate')}
+                className="inline-flex items-center gap-1.5 text-neutral-300 hover:text-emerald-400 font-medium transition-colors"
+              >
+                <Play className="w-3 h-3" />
+                Test Overlay
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Global Hotkey Listeners Status Card */}
+        <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-neutral-200 uppercase font-mono tracking-wider">
+              System Interop & Hotkey Hooks
+            </h2>
+            <Activity className="w-4 h-4 text-emerald-500" />
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-neutral-950/60 border border-neutral-800/40">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded bg-neutral-900 border border-neutral-800 flex items-center justify-center text-emerald-400 font-mono text-xs">
+                  STT
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-neutral-200 block">Voice Dictation Trigger</span>
+                  <span className="text-xs text-neutral-500">Record mic, transcribe via whisper.cpp, auto-paste to cursor</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <kbd className="px-2.5 py-1 rounded bg-neutral-900 border border-neutral-700 text-neutral-200 font-mono text-xs shadow-inner">
+                  {settings.sttHotkey}
+                </kbd>
+                <span className="text-[11px] font-mono text-emerald-400">HOOKED</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 rounded-lg bg-neutral-950/60 border border-neutral-800/40">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded bg-neutral-900 border border-neutral-800 flex items-center justify-center text-emerald-400 font-mono text-xs">
+                  TRN
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-neutral-200 block">Selection Translation Trigger</span>
+                  <span className="text-xs text-neutral-500">Capture clipboard selection, auto-detect language, instant translate</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <kbd className="px-2.5 py-1 rounded bg-neutral-900 border border-neutral-700 text-neutral-200 font-mono text-xs shadow-inner">
+                  {settings.translateHotkey}
+                </kbd>
+                <span className="text-[11px] font-mono text-emerald-400">HOOKED</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

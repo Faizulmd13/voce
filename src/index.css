@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: rgba(38, 38, 38, 0.6);
+  }
+  body {
+    background-color: #0a0a0a;
+    color: #f5f5f5;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+}
+
+/* Custom Minimalist Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #404040;
+}
+
+/* Minimal Glassmorphism & Animations */
+.glass-panel {
+  background-color: rgba(23, 23, 23, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(38, 38, 38, 0.7);
+}
+
+.hud-pill {
+  background-color: rgba(15, 15, 15, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(38, 38, 38, 0.8);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7), 0 0 20px 0 rgba(16, 185, 129, 0.05);
+}
+
+/* Sound Wave Animation Bars */
+@keyframes audioPulse {
+  0%, 100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.animate-sound-wave-1 {
+  animation: audioPulse 0.8s ease-in-out infinite alternate;
+}
+.animate-sound-wave-2 {
+  animation: audioPulse 0.6s ease-in-out 0.2s infinite alternate;
+}
+.animate-sound-wave-3 {
+  animation: audioPulse 1.1s ease-in-out 0.4s infinite alternate;
+}
+.animate-sound-wave-4 {
+  animation: audioPulse 0.7s ease-in-out 0.1s infinite alternate;
+}
+.animate-sound-wave-5 {
+  animation: audioPulse 0.9s ease-in-out 0.3s infinite alternate;
+}
