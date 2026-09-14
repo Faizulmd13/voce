@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Voce - Local-First AI Desktop Application"
 authors = ["Faizul <faizul@voce.ai>"]
 edition = "2021"
+default-run = "voce"
 
 [lib]
 name = "voce_lib"

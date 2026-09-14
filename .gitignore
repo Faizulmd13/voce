@@ -36,3 +36,5 @@ src-tauri/models/nllb-200/
 .env
 .env.*
 !.env.example
+
+src-tauri/models/
