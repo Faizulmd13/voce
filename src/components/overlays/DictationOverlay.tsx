@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Mic, Check, X, Loader2, Sparkles } from 'lucide-react';
+import { 
+  startAudioRecording, 
+  stopAudioRecording, 
+  executeLocalTranscription, 
+  injectTextToCursor 
+} from '../../services/tauri';
 
 interface DictationOverlayProps {
   isOpen: boolean;
@@ -26,6 +32,9 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
       return;
     }
 
+    // Start hardware audio capture via cpal
+    startAudioRecording();
+
     // Timer for recording
     const interval = setInterval(() => {
       setRecordingSeconds((prev) => prev + 1);
@@ -34,6 +43,7 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
     // Escape listener to close
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        stopAudioRecording();
         onClose();
       }
     };
@@ -45,26 +55,31 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
     };
   }, [isOpen, onClose]);
 
-  const handleStopAndTranscribe = () => {
+  const handleStopAndTranscribe = async () => {
     setState('transcribing');
-    // Simulate / Trigger Whisper processing
-    setTimeout(() => {
-      const sampleTranscripts = [
-        "The quick brown fox jumps over the lazy dog.",
-        "Refactoring the global hook listener for optimal latency.",
-        "Voce provides local-first privacy-focused speech dictation.",
-        "All AI computation runs directly on device with zero cloud latency."
-      ];
-      const result = sampleTranscripts[Math.floor(Math.random() * sampleTranscripts.length)];
+    try {
+      // 1. Stop audio recording and get 16kHz WAV file path
+      const wavPath = await stopAudioRecording();
+
+      // 2. Execute local whisper.cpp sidecar
+      const result = await executeLocalTranscription(wavPath);
       setTranscript(result);
       setState('success');
       onTranscriptionComplete(result);
 
+      // 3. Inject text to active OS cursor if autoPaste is enabled
+      if (autoPaste) {
+        await injectTextToCursor(result);
+      }
+
       // Auto close after brief display
       setTimeout(() => {
         onClose();
-      }, 1500);
-    }, 1200);
+      }, 1200);
+    } catch (e) {
+      console.error('Transcription flow error:', e);
+      setState('listening');
+    }
   };
 
   if (!isOpen) return null;

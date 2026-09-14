@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Languages, Copy, Check, X, ArrowRight, CornerDownLeft, Sparkles } from 'lucide-react';
 import { TranslationRecord } from '../../types';
+import { 
+  getClipboardText, 
+  executeLocalTranslation, 
+  injectTextToCursor 
+} from '../../services/tauri';
 
 interface TranslationOverlayProps {
   isOpen: boolean;
@@ -26,29 +31,47 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
     setSelectedTargetLang(targetLanguage);
   }, [targetLanguage]);
 
-  // Mock dynamic translation update when typing or changing language
-  const handleSourceChange = (text: string) => {
+  // Dynamic translation update when typing or changing language
+  const handleSourceChange = async (text: string) => {
     setSourceText(text);
     if (!text.trim()) {
       setTranslatedText('');
       return;
     }
     setIsTranslating(true);
-    setTimeout(() => {
-      setTranslatedText(`[${selectedTargetLang}] ${text}`);
+    try {
+      const translated = await executeLocalTranslation(text, selectedTargetLang);
+      setTranslatedText(translated);
       setSourceLang('Auto-detected');
+    } catch (e) {
+      console.error('Translation error:', e);
+    } finally {
       setIsTranslating(false);
-    }, 300);
+    }
   };
 
   useEffect(() => {
     if (!isOpen) return;
 
-    // Simulate reading clipboard / selected text
-    setIsTranslating(true);
-    const timer = setTimeout(() => {
-      setIsTranslating(false);
-    }, 400);
+    // Automatically read highlighted text from OS clipboard upon hotkey trigger
+    async function fetchClipboardAndTranslate() {
+      setIsTranslating(true);
+      try {
+        const text = await getClipboardText();
+        if (text && text.trim()) {
+          setSourceText(text);
+          const translated = await executeLocalTranslation(text, selectedTargetLang);
+          setTranslatedText(translated);
+          setSourceLang('Auto-detected');
+        }
+      } catch (e) {
+        console.warn('Failed to auto-fetch clipboard text:', e);
+      } finally {
+        setIsTranslating(false);
+      }
+    }
+
+    fetchClipboardAndTranslate();
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -57,10 +80,9 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
-      clearTimeout(timer);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, selectedTargetLang]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(translatedText);
@@ -68,7 +90,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleInsertAtCursor = () => {
+  const handleInsertAtCursor = async () => {
     const record: TranslationRecord = {
       id: `trn-${Date.now()}`,
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
@@ -79,7 +101,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
       charCount: sourceText.length,
     };
     onSaveTranslation(record);
-    handleCopy();
+    await injectTextToCursor(translatedText);
     onClose();
   };
 

@@ -9,6 +9,18 @@ edition = "2021"
 name = "voce_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "voce"
+path = "src/main.rs"
+
+[[bin]]
+name = "whisper"
+path = "src/bin/whisper.rs"
+
+[[bin]]
+name = "translator"
+path = "src/bin/translator.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -22,6 +34,10 @@ tauri-plugin-oauth = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
+cpal = "0.15"
+hound = "3.5"
+enigo = "0.3"
+arboard = "3.4"
 
 [profile.release]
 panic = "abort"

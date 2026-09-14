@@ -16,6 +16,7 @@ dist-ssr
 # Rust / Tauri
 src-tauri/target
 src-tauri/gen
+*.pdb
 
 # Editor directories and files
 .vscode/*
