@@ -113,3 +113,26 @@ export async function hideOverlay(label: 'stt-overlay' | 'translate-overlay'): P
   await invoke('hide_overlay', { label });
 }
 
+export async function isAutostartEnabled(): Promise<boolean> {
+  try {
+    const { isEnabled } = await import('@tauri-apps/plugin-autostart');
+    return await isEnabled();
+  } catch (e) {
+    console.warn('Autostart plugin unavailable:', e);
+    return false;
+  }
+}
+
+export async function setAutostartEnabled(enabled: boolean): Promise<void> {
+  try {
+    const { enable, disable } = await import('@tauri-apps/plugin-autostart');
+    if (enabled) {
+      await enable();
+    } else {
+      await disable();
+    }
+  } catch (e) {
+    console.warn('Failed to toggle autostart:', e);
+  }
+}
+

@@ -155,11 +155,11 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
     <div className={`w-full h-full flex items-center justify-center ${isStandalone ? 'bg-transparent' : 'fixed inset-0 z-50 bg-black/45 backdrop-blur-sm p-4'}`}>
       {/* Root Modal Container */}
       <div className="w-full h-full bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden p-3.5 shadow-2xl flex flex-col justify-between space-y-2.5 select-none">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
-          <div className="flex items-center gap-1.5">
-            <Languages className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-300 font-semibold">
+        {/* Draggable Header */}
+        <div data-tauri-drag-region="true" className="flex items-center justify-between border-b border-neutral-800 pb-2 cursor-move">
+          <div data-tauri-drag-region="true" className="flex items-center gap-1.5 cursor-move">
+            <Languages className="w-3.5 h-3.5 text-emerald-500 pointer-events-none" />
+            <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-300 font-semibold pointer-events-none">
               Live Translation
             </span>
           </div>

@@ -14,7 +14,7 @@ import {
   Trash2,
   X
 } from 'lucide-react';
-import { getStoredApiKey, saveGroqApiKey, validateGroqApiKey, openExternalUrl } from '../services/tauri';
+import { getStoredApiKey, saveGroqApiKey, validateGroqApiKey, openExternalUrl, isAutostartEnabled, setAutostartEnabled } from '../services/tauri';
 
 interface SettingsPageProps {
   settings: UserSettings;
@@ -35,12 +35,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [isResettingKey, setIsResettingKey] = useState(false);
   const [keySaveStatus, setKeySaveStatus] = useState<string | null>(null);
+  const [autostartEnabled, setAutostartEnabledState] = useState(false);
 
   useEffect(() => {
     getStoredApiKey().then((k) => {
       if (k) setApiKeyInput(k);
     });
+    isAutostartEnabled().then((enabled) => {
+      setAutostartEnabledState(enabled);
+    });
   }, []);
+
+  const handleToggleAutostart = async () => {
+    const next = !autostartEnabled;
+    setAutostartEnabledState(next);
+    await setAutostartEnabled(next);
+  };
 
   const handleSaveApiKey = async () => {
     if (!apiKeyInput.trim()) return;
@@ -290,6 +300,28 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             <div
               className={`w-5 h-5 rounded-full bg-neutral-100 shadow-md transform transition-transform ${
                 settings.autoPasteToCursor ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Autostart on Boot Toggle */}
+        <div className="p-5 flex items-center justify-between">
+          <div>
+            <span className="text-sm font-medium text-neutral-200 block">Launch Voce on Startup</span>
+            <span className="text-xs text-neutral-500">
+              Automatically start Voce in the background system tray when Windows boots
+            </span>
+          </div>
+          <button
+            onClick={handleToggleAutostart}
+            className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${
+              autostartEnabled ? 'bg-emerald-500' : 'bg-neutral-800'
+            }`}
+          >
+            <div
+              className={`w-5 h-5 rounded-full bg-neutral-100 shadow-md transform transition-transform ${
+                autostartEnabled ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
           </button>

@@ -667,11 +667,23 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:voce.db", migrations)
                 .build(),
         )
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
+            }
+        })
         .setup(|app| {
             let global_shortcut = app.global_shortcut();
 
@@ -693,21 +705,22 @@ pub fn run() {
                 });
             }
 
-            let quit_i = MenuItem::with_id(app, "quit", "Quit Voce", true, None::<&str>)?;
-            let show_i = MenuItem::with_id(app, "show", "Show Dashboard", true, None::<&str>)?;
+            let show_i = MenuItem::with_id(app, "show", "Open Settings", true, None::<&str>)?;
             let stt_i = MenuItem::with_id(app, "stt", "Voice Dictation (Alt+Space)", true, None::<&str>)?;
             let trn_i = MenuItem::with_id(app, "trn", "Translate Selection (Alt+T)", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "Quit Voce", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &stt_i, &trn_i, &quit_i])?;
 
             let _tray = TrayIconBuilder::new()
                 .menu(&menu)
-                .tooltip("Voce - Local-First AI")
+                .tooltip("Voce - AI Desktop Assistant")
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => {
                         app.exit(0);
                     }
                     "show" => {
                         if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
@@ -729,6 +742,7 @@ pub fn run() {
                     {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
