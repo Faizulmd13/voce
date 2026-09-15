@@ -64,11 +64,9 @@
     "active": true,
     "targets": "nsis",
     "resources": [
-      "models/*",
       "models/nllb-200/*"
     ],
     "externalBin": [
-      "bins/whisper",
       "bins/translator"
     ],
     "icon": [

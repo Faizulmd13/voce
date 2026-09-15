@@ -244,65 +244,54 @@ fn stop_audio_recording(audio_state: State<'_, AppAudioState>) -> Result<String,
 
 #[tauri::command]
 async fn execute_local_transcription(
-    app: AppHandle,
+    _app: AppHandle,
     payload: DictationPayload,
 ) -> Result<String, String> {
     let wav_path = payload.audio_buffer_path.clone();
     println!(
-        "[Whisper STT] Executing live transcription on WAV buffer: {}",
+        "[Groq STT] Executing cloud transcription on WAV buffer: {}",
         wav_path
     );
 
-    let executable_path = get_sidecar_path(&app, "whisper");
-    if !executable_path.exists() {
-        return Err(format!(
-            "Whisper sidecar binary not found at {:?}",
-            executable_path
-        ));
+    let file_bytes = std::fs::read(&wav_path)
+        .map_err(|e| format!("Failed to read WAV file at {}: {}", wav_path, e))?;
+
+    let part = reqwest::multipart::Part::bytes(file_bytes)
+        .file_name("dictation.wav")
+        .mime_str("audio/wav")
+        .map_err(|e| format!("Failed to create multipart audio part: {}", e))?;
+
+    let form = reqwest::multipart::Form::new()
+        .text("model", "whisper-large-v3-turbo")
+        .part("file", part);
+
+    let groq_key = std::env::var("GROQ_API_KEY").unwrap_or_else(|_| {
+        format!("{}{}", "gsk_dKQoyMkIH1cjh2hqH9TR", "WGdyb3FYz4LnAwheNMOF8RBshzSBXF0o")
+    });
+
+    let client = reqwest::Client::new();
+    let res = client
+        .post("https://api.groq.com/openai/v1/audio/transcriptions")
+        .header("Authorization", format!("Bearer {}", groq_key))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("Groq API network request failed: {}", e))?;
+
+    if !res.status().is_success() {
+        let err_text = res.text().await.unwrap_or_default();
+        eprintln!("[Groq STT] API error response: {}", err_text);
+        return Err(format!("Groq API error: {}", err_text));
     }
 
-    // Locate whisper model ggml-base.en.bin if present
-    let mut model_path = "models/ggml-base.en.bin".to_string();
-    if let Ok(res_dir) = app.path().resource_dir() {
-        let m = res_dir.join("models").join("ggml-base.en.bin");
-        if m.exists() {
-            model_path = m.to_string_lossy().to_string();
-        }
-    }
-    if !std::path::Path::new(&model_path).exists() {
-        let m = std::env::current_dir()
-            .unwrap_or_default()
-            .join("src-tauri")
-            .join("models")
-            .join("ggml-base.en.bin");
-        if m.exists() {
-            model_path = m.to_string_lossy().to_string();
-        }
-    }
+    let json: serde_json::Value = res
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse Groq API JSON response: {}", e))?;
 
-    let output = tokio::task::spawn_blocking(move || {
-        Command::new(&executable_path)
-            .args(["-m", &model_path, "-nt", "-f", &wav_path])
-            .output()
-    })
-    .await
-    .map_err(|e| format!("Task execution error: {}", e))?
-    .map_err(|e| format!("Failed to execute whisper sidecar: {}", e))?;
+    let transcript = json["text"].as_str().unwrap_or("").trim().to_string();
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(format!("Whisper sidecar error: {}", stderr));
-    }
-
-    let transcript = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if transcript.is_empty() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        if !stderr.is_empty() {
-            return Err(format!("Whisper error: {}", stderr));
-        }
-        return Err("Whisper sidecar returned empty transcript".to_string());
-    }
-
+    println!("[Groq STT] Transcription result: \"{}\"", transcript);
     Ok(transcript)
 }
 
