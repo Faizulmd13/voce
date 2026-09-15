@@ -1,7 +1,7 @@
 import React from 'react';
 import { Header } from '../components/Header';
 import { AppMetrics, UserSettings, OverlayMode } from '../types';
-import { Activity, Mic, Languages, CheckCircle2, ShieldCheck, Cpu, Play } from 'lucide-react';
+import { Activity, Mic, Languages, Play } from 'lucide-react';
 
 interface HomePageProps {
   metrics: AppMetrics;
@@ -39,55 +39,6 @@ export const HomePage: React.FC<HomePageProps> = ({ metrics, settings, onTrigger
       />
 
       <div className="space-y-6">
-        {/* Status Indicator Area: Clean, explicit in-body container showcasing active system listening/daemon state */}
-        <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse-subtle" />
-              <span className="font-mono text-xs uppercase tracking-wider text-neutral-400">System Daemon Status</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {settings.userProfile.isAuthenticated && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  Google Synced
-                </span>
-              )}
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Daemon Active
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1 border-t border-neutral-800/40">
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-neutral-950/60 border border-neutral-800/40">
-              <Cpu className="w-4 h-4 text-emerald-500 mt-0.5" />
-              <div>
-                <span className="text-[11px] font-mono uppercase text-neutral-500 block">STT Engine</span>
-                <span className="text-sm font-medium text-neutral-200">whisper.cpp (Local)</span>
-                <span className="text-[11px] text-neutral-500 block mt-0.5">Model: {settings.whisperModel}</span>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-neutral-950/60 border border-neutral-800/40">
-              <Languages className="w-4 h-4 text-emerald-500 mt-0.5" />
-              <div>
-                <span className="text-[11px] font-mono uppercase text-neutral-500 block">Translation Engine</span>
-                <span className="text-sm font-medium text-neutral-200">CTranslate2 (Local)</span>
-                <span className="text-[11px] text-neutral-500 block mt-0.5">Target: {settings.targetLanguage}</span>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-neutral-950/60 border border-neutral-800/40">
-              <ShieldCheck className="w-4 h-4 text-emerald-500 mt-0.5" />
-              <div>
-                <span className="text-[11px] font-mono uppercase text-neutral-500 block">Privacy Guard</span>
-                <span className="text-sm font-medium text-emerald-400">100% Offline Core</span>
-                <span className="text-[11px] text-neutral-500 block mt-0.5">Zero cloud telemetry</span>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* Metric Analytics Display: Unified layout rows showing high-contrast, beautiful typography */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -164,7 +115,7 @@ export const HomePage: React.FC<HomePageProps> = ({ metrics, settings, onTrigger
                 </div>
                 <div>
                   <span className="text-sm font-medium text-neutral-200 block">Voice Dictation Trigger</span>
-                  <span className="text-xs text-neutral-500">Record mic, transcribe via whisper.cpp, auto-paste to cursor</span>
+                  <span className="text-xs text-neutral-500">Record mic, transcribe via Groq Whisper, auto-paste to cursor</span>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -182,7 +133,7 @@ export const HomePage: React.FC<HomePageProps> = ({ metrics, settings, onTrigger
                 </div>
                 <div>
                   <span className="text-sm font-medium text-neutral-200 block">Selection Translation Trigger</span>
-                  <span className="text-xs text-neutral-500">Capture clipboard selection, auto-detect language, instant translate</span>
+                  <span className="text-xs text-neutral-500">Capture clipboard selection, translate via Groq Llama, instant paste</span>
                 </div>
               </div>
               <div className="flex items-center gap-3">

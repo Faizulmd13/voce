@@ -15,10 +15,10 @@ import {
   clearHistoryInDb 
 } from './services/db';
 import { 
-  triggerGoogleOAuth, 
   updateBackendHotkeys,
   showOverlay,
-  getStoredApiKey
+  getStoredApiKey,
+  saveGroqApiKey
 } from './services/tauri';
 import { listen } from '@tauri-apps/api/event';
 
@@ -33,40 +33,12 @@ const INITIAL_SETTINGS: UserSettings = {
   audioDevice: 'Default System Microphone',
   userProfile: {
     email: 'local.user@voce.internal',
-    name: 'Faizul',
+    name: 'Voce User',
     isAuthenticated: false,
   },
 };
 
-const INITIAL_HISTORY: TranslationRecord[] = [
-  {
-    id: 'trn-1',
-    timestamp: '2026-09-14 10:42:15',
-    sourceText: 'Die Grenzen meiner Sprache bedeuten die Grenzen meiner Welt.',
-    sourceLang: 'German',
-    translatedText: 'The limits of my language mean the limits of my world.',
-    targetLang: 'English',
-    charCount: 62,
-  },
-  {
-    id: 'trn-2',
-    timestamp: '2026-09-14 09:18:30',
-    sourceText: 'Le silence est le plus grand luxe de la vie moderne.',
-    sourceLang: 'French',
-    translatedText: 'Silence is the greatest luxury of modern life.',
-    targetLang: 'English',
-    charCount: 52,
-  },
-  {
-    id: 'trn-3',
-    timestamp: '2026-09-14 08:05:12',
-    sourceText: '千里之行，始于足下。',
-    sourceLang: 'Chinese (Simplified)',
-    translatedText: 'A journey of a thousand miles begins with a single step.',
-    targetLang: 'English',
-    charCount: 10,
-  },
-];
+const INITIAL_HISTORY: TranslationRecord[] = [];
 
 export const App: React.FC = () => {
   const pathname = window.location.pathname;
@@ -87,10 +59,10 @@ export const App: React.FC = () => {
   const [settings, setSettings] = useState<UserSettings>(INITIAL_SETTINGS);
   const [history, setHistory] = useState<TranslationRecord[]>(INITIAL_HISTORY);
   const [metrics, setMetrics] = useState<AppMetrics>({
-    totalWordsDictated: 4820,
-    totalCharsTranslated: 14280,
-    totalDictationsCount: 142,
-    totalTranslationsCount: INITIAL_HISTORY.length,
+    totalWordsDictated: 0,
+    totalCharsTranslated: 0,
+    totalDictationsCount: 0,
+    totalTranslationsCount: 0,
     daemonStatus: 'active',
     lastActiveTimestamp: new Date().toISOString(),
   });
@@ -108,7 +80,7 @@ export const App: React.FC = () => {
       const dbSettings = await loadPreferencesFromDb(INITIAL_SETTINGS);
       setSettings(dbSettings);
 
-      const dbHistory = await loadHistoryFromDb(INITIAL_HISTORY);
+      const dbHistory = await loadHistoryFromDb([]);
       setHistory(dbHistory);
 
       await updateBackendHotkeys(dbSettings.sttHotkey, dbSettings.translateHotkey);
@@ -116,15 +88,15 @@ export const App: React.FC = () => {
       const totalChars = dbHistory.reduce((acc, curr) => acc + (curr.charCount || curr.sourceText.length), 0);
       setMetrics((prev) => ({
         ...prev,
-        totalCharsTranslated: Math.max(prev.totalCharsTranslated, totalChars),
+        totalCharsTranslated: totalChars,
         totalTranslationsCount: dbHistory.length,
       }));
     }
 
     initDbAndShortcuts();
 
-    // Listen for transcription completed events to update metrics & history
-    const unlistenPromise = listen<{ text: string }>('transcription-completed', (event) => {
+    // Listen for transcription completed events to dynamically update metrics
+    const unlistenSttPromise = listen<{ text: string }>('transcription-completed', (event) => {
       if (event.payload?.text) {
         const words = event.payload.text.split(/\s+/).filter(Boolean).length;
         setMetrics((prev) => ({
@@ -135,8 +107,36 @@ export const App: React.FC = () => {
       }
     });
 
+    // Listen for translation completed events to dynamically update history & metrics
+    const unlistenTrnPromise = listen<{
+      source_text: string;
+      translated_text: string;
+      source_lang: string;
+      target_lang: string;
+    }>('translation-completed', async (event) => {
+      if (event.payload?.translated_text) {
+        const record: TranslationRecord = {
+          id: `trn-${Date.now()}`,
+          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          sourceText: event.payload.source_text,
+          sourceLang: event.payload.source_lang || 'Auto-detected',
+          translatedText: event.payload.translated_text,
+          targetLang: event.payload.target_lang || 'English',
+          charCount: event.payload.source_text.length,
+        };
+        setHistory((prev) => [record, ...prev]);
+        await insertHistoryToDb(record);
+        setMetrics((prev) => ({
+          ...prev,
+          totalCharsTranslated: prev.totalCharsTranslated + record.charCount,
+          totalTranslationsCount: prev.totalTranslationsCount + 1,
+        }));
+      }
+    });
+
     return () => {
-      unlistenPromise.then((unlisten) => unlisten());
+      unlistenSttPromise.then((unlisten) => unlisten());
+      unlistenTrnPromise.then((unlisten) => unlisten());
     };
   }, []);
 
@@ -150,57 +150,9 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleExportData = () => {
-    const exportObject = {
-      settings,
-      history,
-      metrics,
-      exportedAt: new Date().toISOString(),
-      appVersion: '1.0.0',
-    };
-    const blob = new Blob([JSON.stringify(exportObject, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `voce-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportData = async (jsonData: string) => {
-    try {
-      const parsed = JSON.parse(jsonData);
-      if (parsed.settings) {
-        setSettings(parsed.settings);
-        await savePreferencesToDb(parsed.settings);
-        await updateBackendHotkeys(parsed.settings.sttHotkey, parsed.settings.translateHotkey);
-      }
-      if (parsed.history && Array.isArray(parsed.history)) {
-        setHistory(parsed.history);
-        for (const item of parsed.history) {
-          await insertHistoryToDb(item);
-        }
-      }
-      if (parsed.metrics) {
-        setMetrics(parsed.metrics);
-      }
-    } catch (e) {
-      console.error('Failed to import JSON data:', e);
-      throw e;
-    }
-  };
-
-  const handleGoogleAuth = async () => {
-    if (settings.userProfile.isAuthenticated) {
-      const updatedProfile = {
-        ...settings.userProfile,
-        isAuthenticated: false,
-      };
-      await handleUpdateSettings({ userProfile: updatedProfile });
-    } else {
-      const profile = await triggerGoogleOAuth();
-      await handleUpdateSettings({ userProfile: profile });
-    }
+  const handleResetApiKey = async () => {
+    await saveGroqApiKey('');
+    setHasApiKey(false);
   };
 
   const handleClearHistory = async () => {
@@ -208,6 +160,7 @@ export const App: React.FC = () => {
     await clearHistoryInDb();
     setMetrics((prev) => ({
       ...prev,
+      totalCharsTranslated: 0,
       totalTranslationsCount: 0,
     }));
   };
@@ -260,9 +213,7 @@ export const App: React.FC = () => {
           <SettingsPage
             settings={settings}
             onUpdateSettings={handleUpdateSettings}
-            onExportData={handleExportData}
-            onImportData={handleImportData}
-            onGoogleAuth={handleGoogleAuth}
+            onResetApiKey={handleResetApiKey}
           />
         )}
       </main>
@@ -271,4 +222,3 @@ export const App: React.FC = () => {
 };
 
 export default App;
-

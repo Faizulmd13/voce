@@ -5,41 +5,35 @@ import {
   Keyboard, 
   Mic, 
   Languages, 
-  Download, 
-  Upload, 
-  User, 
   Check, 
-  Sparkles,
-  LogOut,
-  LogIn,
-  Key,
-  Zap,
-  Eye,
-  EyeOff,
-  ExternalLink
+  Key, 
+  Zap, 
+  Eye, 
+  EyeOff, 
+  ExternalLink,
+  Trash2,
+  X
 } from 'lucide-react';
 import { getStoredApiKey, saveGroqApiKey, validateGroqApiKey, openExternalUrl } from '../services/tauri';
 
 interface SettingsPageProps {
   settings: UserSettings;
   onUpdateSettings: (newSettings: Partial<UserSettings>) => void;
-  onExportData: () => void;
-  onImportData: (jsonData: string) => void;
-  onGoogleAuth: () => void;
+  onResetApiKey?: () => void;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   settings,
   onUpdateSettings,
-  onExportData,
-  onImportData,
-  onGoogleAuth
+  onResetApiKey,
 }) => {
   const [editingHotkey, setEditingHotkey] = useState<'stt' | 'translate' | null>(null);
-  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [recordedChord, setRecordedChord] = useState<string>('');
+  
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [isSavingKey, setIsSavingKey] = useState(false);
+  const [isResettingKey, setIsResettingKey] = useState(false);
   const [keySaveStatus, setKeySaveStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,46 +62,85 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent, type: 'stt' | 'translate') => {
-    e.preventDefault();
-    const keys: string[] = [];
-    if (e.ctrlKey) keys.push('Ctrl');
-    if (e.altKey) keys.push('Alt');
-    if (e.shiftKey) keys.push('Shift');
-    if (e.metaKey) keys.push('Meta');
-
-    const key = e.key;
-    if (!['Control', 'Alt', 'Shift', 'Meta'].includes(key)) {
-      keys.push(key.length === 1 ? key.toUpperCase() : key);
-    }
-
-    if (keys.length > 0) {
-      const combo = keys.join('+');
-      if (type === 'stt') {
-        onUpdateSettings({ sttHotkey: combo });
-      } else {
-        onUpdateSettings({ translateHotkey: combo });
+  const handleResetApiKey = async () => {
+    setIsResettingKey(true);
+    setKeySaveStatus(null);
+    try {
+      await saveGroqApiKey('');
+      setApiKeyInput('');
+      setKeySaveStatus('API key removed from local store.');
+      if (onResetApiKey) {
+        onResetApiKey();
       }
-      setEditingHotkey(null);
+      setTimeout(() => setKeySaveStatus(null), 3500);
+    } catch (err: any) {
+      setKeySaveStatus(`Error removing key: ${err?.message || err}`);
+    } finally {
+      setIsResettingKey(false);
     }
   };
 
-  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        try {
-          const content = event.target?.result as string;
-          onImportData(content);
-          setImportStatus('Data imported successfully');
-          setTimeout(() => setImportStatus(null), 3000);
-        } catch {
-          setImportStatus('Failed to parse JSON file');
-          setTimeout(() => setImportStatus(null), 3000);
+  const startRecording = (type: 'stt' | 'translate') => {
+    setEditingHotkey(type);
+    setRecordedChord('');
+  };
+
+  const cancelRecording = () => {
+    setEditingHotkey(null);
+    setRecordedChord('');
+  };
+
+  const handleHotkeyKeyDown = (e: React.KeyboardEvent, type: 'stt' | 'translate') => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Cancel on Escape
+    if (e.key === 'Escape') {
+      cancelRecording();
+      return;
+    }
+
+    // Commit on Enter if chord is non-empty and not just modifier
+    if (e.key === 'Enter') {
+      if (recordedChord && !recordedChord.endsWith('...')) {
+        if (type === 'stt') {
+          onUpdateSettings({ sttHotkey: recordedChord });
+        } else {
+          onUpdateSettings({ translateHotkey: recordedChord });
         }
-      };
-      reader.readAsText(file);
+        setEditingHotkey(null);
+        setRecordedChord('');
+      }
+      return;
+    }
+
+    // Capture modifiers and primary key
+    const modifiers: string[] = [];
+    if (e.ctrlKey) modifiers.push('Ctrl');
+    if (e.altKey) modifiers.push('Alt');
+    if (e.shiftKey) modifiers.push('Shift');
+    if (e.metaKey) modifiers.push('Meta');
+
+    const rawKey = e.key;
+    const isModifierOnly = ['Control', 'Alt', 'Shift', 'Meta', 'AltGraph', 'CapsLock', 'Tab', 'Dead', 'Unidentified'].includes(rawKey);
+
+    if (isModifierOnly) {
+      if (modifiers.length > 0) {
+        setRecordedChord(modifiers.join('+') + '+...');
+      }
+    } else {
+      let formattedKey = rawKey;
+      if (rawKey === ' ') {
+        formattedKey = 'Space';
+      } else if (rawKey.startsWith('Arrow')) {
+        formattedKey = rawKey.replace('Arrow', '');
+      } else if (rawKey.length === 1) {
+        formattedKey = rawKey.toUpperCase();
+      }
+
+      // If user pressed a Function key without modifiers (e.g., F1-F12), that is also valid
+      const fullChord = modifiers.length > 0 ? [...modifiers, formattedKey].join('+') : formattedKey;
+      setRecordedChord(fullChord);
     }
   };
 
@@ -116,7 +149,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       {/* Top Header Layout Primitive */}
       <Header category="Preferences" title="Settings" />
 
-      {/* App Preferences: Clean, inline layout rows replacing old isolated profile cards */}
+      {/* App Preferences: Clean, inline layout rows */}
       <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl divide-y divide-neutral-800/50 shadow-sm">
         <div className="p-5">
           <h2 className="text-sm font-semibold text-neutral-200 uppercase font-mono tracking-wider mb-1">
@@ -138,24 +171,48 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               <span className="text-xs text-neutral-500">Hold or press to activate voice recording overlay</span>
             </div>
           </div>
-          <div>
+          <div className="flex flex-col items-end gap-1.5">
             {editingHotkey === 'stt' ? (
-              <input
-                type="text"
-                autoFocus
-                placeholder="Press key combo..."
-                onKeyDown={(e) => handleKeyDown(e, 'stt')}
-                onBlur={() => setEditingHotkey(null)}
-                className="bg-neutral-950 border border-emerald-500 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none text-center animate-pulse"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  autoFocus
+                  readOnly
+                  value={recordedChord || ''}
+                  placeholder="Press key chord..."
+                  onKeyDown={(e) => handleHotkeyKeyDown(e, 'stt')}
+                  onBlur={() => {
+                    // Slight delay to prevent immediate blur cancellation on accidental click
+                    setTimeout(() => {
+                      if (editingHotkey === 'stt' && !recordedChord) {
+                        cancelRecording();
+                      }
+                    }, 200);
+                  }}
+                  className="bg-neutral-950 border border-emerald-500 text-emerald-400 px-3.5 py-1.5 rounded-lg text-xs font-mono focus:outline-none text-center animate-pulse min-w-[160px] cursor-pointer shadow-sm shadow-emerald-500/20"
+                />
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  className="p-1.5 text-neutral-400 hover:text-neutral-200 bg-neutral-950 border border-neutral-800 rounded-lg transition-colors"
+                  title="Cancel (Esc)"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             ) : (
               <button
-                onClick={() => setEditingHotkey('stt')}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-mono transition-colors"
+                onClick={() => startRecording('stt')}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-mono transition-colors group"
               >
-                <Keyboard className="w-3.5 h-3.5 text-neutral-500" />
+                <Keyboard className="w-3.5 h-3.5 text-neutral-500 group-hover:text-emerald-400 transition-colors" />
                 <span>{settings.sttHotkey}</span>
               </button>
+            )}
+            {editingHotkey === 'stt' && (
+              <span className="text-[10px] font-mono text-neutral-400">
+                Press <kbd className="text-emerald-400">Enter</kbd> to confirm • <kbd className="text-neutral-300">Esc</kbd> to cancel
+              </span>
             )}
           </div>
         </div>
@@ -171,24 +228,47 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               <span className="text-xs text-neutral-500">Reads highlighted text and opens translation overlay</span>
             </div>
           </div>
-          <div>
+          <div className="flex flex-col items-end gap-1.5">
             {editingHotkey === 'translate' ? (
-              <input
-                type="text"
-                autoFocus
-                placeholder="Press key combo..."
-                onKeyDown={(e) => handleKeyDown(e, 'translate')}
-                onBlur={() => setEditingHotkey(null)}
-                className="bg-neutral-950 border border-emerald-500 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none text-center animate-pulse"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  autoFocus
+                  readOnly
+                  value={recordedChord || ''}
+                  placeholder="Press key chord..."
+                  onKeyDown={(e) => handleHotkeyKeyDown(e, 'translate')}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      if (editingHotkey === 'translate' && !recordedChord) {
+                        cancelRecording();
+                      }
+                    }, 200);
+                  }}
+                  className="bg-neutral-950 border border-emerald-500 text-emerald-400 px-3.5 py-1.5 rounded-lg text-xs font-mono focus:outline-none text-center animate-pulse min-w-[160px] cursor-pointer shadow-sm shadow-emerald-500/20"
+                />
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  className="p-1.5 text-neutral-400 hover:text-neutral-200 bg-neutral-950 border border-neutral-800 rounded-lg transition-colors"
+                  title="Cancel (Esc)"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             ) : (
               <button
-                onClick={() => setEditingHotkey('translate')}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-mono transition-colors"
+                onClick={() => startRecording('translate')}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-mono transition-colors group"
               >
-                <Keyboard className="w-3.5 h-3.5 text-neutral-500" />
+                <Keyboard className="w-3.5 h-3.5 text-neutral-500 group-hover:text-emerald-400 transition-colors" />
                 <span>{settings.translateHotkey}</span>
               </button>
+            )}
+            {editingHotkey === 'translate' && (
+              <span className="text-[10px] font-mono text-neutral-400">
+                Press <kbd className="text-emerald-400">Enter</kbd> to confirm • <kbd className="text-neutral-300">Esc</kbd> to cancel
+              </span>
             )}
           </div>
         </div>
@@ -245,7 +325,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         <div className="p-5 flex items-center justify-between">
           <div>
             <span className="text-sm font-medium text-neutral-200 block">Microphone Device</span>
-            <span className="text-xs text-neutral-500">Default audio input stream used for whisper.cpp recording</span>
+            <span className="text-xs text-neutral-500">Default audio input stream used for voice dictation recording</span>
           </div>
           <select
             value={settings.audioDevice}
@@ -256,35 +336,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             <option value="Realtek High Definition Audio">Realtek High Definition Audio</option>
             <option value="Virtual Audio Cable">Virtual Audio Cable</option>
           </select>
-        </div>
-      </div>
-
-      {/* Usage Statistics Section (Exact text from DESIGN.md Section 2.D) */}
-      <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-5 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-4 h-4 text-emerald-500" />
-              <span className="text-sm font-semibold text-neutral-200 uppercase font-mono tracking-wider">
-                Usage Statistics
-              </span>
-            </div>
-            <p className="text-xs text-neutral-400 font-sans leading-relaxed">
-              Anonymously sync total usage metrics (word counts and translation volumes) to update the public product landing page milestone statistics.
-            </p>
-          </div>
-          <button
-            onClick={() => onUpdateSettings({ anonymouslySyncMetrics: !settings.anonymouslySyncMetrics })}
-            className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 shrink-0 ml-4 ${
-              settings.anonymouslySyncMetrics ? 'bg-emerald-500' : 'bg-neutral-800'
-            }`}
-          >
-            <div
-              className={`w-5 h-5 rounded-full bg-neutral-100 shadow-md transform transition-transform ${
-                settings.anonymouslySyncMetrics ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
         </div>
       </div>
 
@@ -348,6 +399,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </button>
 
             <button
+              onClick={handleResetApiKey}
+              disabled={isResettingKey || !apiKeyInput.trim()}
+              className="px-3 py-2 bg-neutral-950 border border-neutral-800 hover:border-rose-900/60 hover:text-rose-400 text-neutral-400 text-xs font-mono rounded-lg transition-colors flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Remove API Key and reset credentials"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Reset</span>
+            </button>
+
+            <button
               onClick={async () => {
                 try {
                   await openExternalUrl('https://console.groq.com/keys');
@@ -363,7 +424,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </div>
 
           {keySaveStatus && (
-            <div className={`text-xs font-mono ${keySaveStatus.includes('successfully') ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <div className={`text-xs font-mono ${keySaveStatus.includes('successfully') || keySaveStatus.includes('removed') ? 'text-emerald-400' : 'text-rose-400'}`}>
               {keySaveStatus}
             </div>
           )}
@@ -387,95 +448,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </div>
             <div className="text-sm font-medium text-neutral-200">Multi-Language Translation</div>
             <p className="text-[11px] text-neutral-500 font-mono mt-1">Zero-shot high-accuracy text translation</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Account / OAuth & Local Database Management */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Google OAuth Status */}
-        <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <User className="w-4 h-4 text-emerald-500" />
-              <span className="text-sm font-semibold text-neutral-200 uppercase font-mono tracking-wider">
-                Account & Sync
-              </span>
-            </div>
-            <p className="text-xs text-neutral-500 font-mono mb-4">
-              Local desktop authentication with optional cloud profile sync.
-            </p>
-
-            {settings.userProfile.isAuthenticated ? (
-              <div className="p-3 rounded-lg bg-neutral-950 border border-neutral-800 flex items-center justify-between">
-                <div>
-                  <span className="text-sm font-medium text-neutral-200 block">{settings.userProfile.name}</span>
-                  <span className="text-xs text-neutral-500 font-mono">{settings.userProfile.email}</span>
-                </div>
-                <button
-                  onClick={onGoogleAuth}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono text-neutral-400 hover:text-red-400 bg-neutral-900 border border-neutral-800 transition-colors"
-                >
-                  <LogOut className="w-3 h-3" />
-                  Sign Out
-                </button>
-              </div>
-            ) : (
-              <div className="p-3 rounded-lg bg-neutral-950 border border-neutral-800 flex items-center justify-between">
-                <div>
-                  <span className="text-sm font-medium text-neutral-300 block">Local Anonymous Profile</span>
-                  <span className="text-xs text-neutral-500 font-mono">100% stored on device</span>
-                </div>
-                <button
-                  onClick={onGoogleAuth}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-neutral-100 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 transition-colors"
-                >
-                  <LogIn className="w-3.5 h-3.5 text-emerald-400" />
-                  Sign in with Google
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Database Export & Import */}
-        <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-neutral-200 uppercase font-mono tracking-wider">
-                Local Data Store (SQLite/JSON)
-              </span>
-              {importStatus && (
-                <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  {importStatus}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-neutral-500 font-mono mb-4">
-              Backup your local history logs and preferences or restore from a previous JSON export.
-            </p>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={onExportData}
-                className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-mono transition-colors"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-400" />
-                Export JSON
-              </button>
-
-              <label className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-mono transition-colors cursor-pointer">
-                <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                Import JSON
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleFileImport}
-                  className="hidden"
-                />
-              </label>
-            </div>
           </div>
         </div>
       </div>

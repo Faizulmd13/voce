@@ -4,15 +4,12 @@ import {
   ExternalLink, 
   Sparkles, 
   ShieldCheck, 
-  Zap, 
   Eye, 
   EyeOff, 
   ArrowRight, 
   CheckCircle2, 
   AlertCircle,
-  ClipboardPaste,
-  Globe,
-  Cpu
+  ClipboardPaste
 } from 'lucide-react';
 import { openExternalUrl, saveGroqApiKey, validateGroqApiKey } from '../services/tauri';
 
@@ -230,27 +227,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
           <div className="pt-2 flex items-start gap-2.5 text-xs text-neutral-500 border-t border-neutral-800/40">
             <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
             <p className="leading-relaxed font-sans">
-              <strong className="text-neutral-400 font-medium">Privacy Guaranteed:</strong> Your API key is stored securely in your local system app data. It is never logged or sent to any server other than Groq's official API.
+              <strong className="text-neutral-400 font-medium">Privacy Guaranteed:</strong> Your API key is stored securely in your local system app data. It is never logged or sent to any third-party server other than Groq's official API.
             </p>
-          </div>
-        </div>
-
-        {/* Features highlights */}
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <div className="p-3 rounded-xl bg-neutral-900/40 border border-neutral-800/40">
-            <Zap className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
-            <div className="text-[11px] font-medium text-neutral-200">Whisper v3 Turbo</div>
-            <div className="text-[10px] text-neutral-500">Sub-second STT</div>
-          </div>
-          <div className="p-3 rounded-xl bg-neutral-900/40 border border-neutral-800/40">
-            <Globe className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
-            <div className="text-[11px] font-medium text-neutral-200">Llama 3.1 8B</div>
-            <div className="text-[10px] text-neutral-500">Fast Translation</div>
-          </div>
-          <div className="p-3 rounded-xl bg-neutral-900/40 border border-neutral-800/40">
-            <Cpu className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
-            <div className="text-[11px] font-medium text-neutral-200">~15MB Bundle</div>
-            <div className="text-[10px] text-neutral-500">Zero Disk Bloat</div>
           </div>
         </div>
       </div>

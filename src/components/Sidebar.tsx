@@ -21,7 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate }) => {
               <span className="font-semibold text-neutral-100 tracking-tight text-lg">Voce</span>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-800/80 text-neutral-400 border border-neutral-700/40">v1.0</span>
             </div>
-            <p className="text-[11px] font-mono text-neutral-500">Local-First AI Desktop</p>
+            <p className="text-[11px] font-mono text-neutral-500">AI Desktop Assistant</p>
           </div>
         </div>
 

@@ -108,9 +108,15 @@ fn get_stored_api_key(app: AppHandle) -> Result<Option<String>, String> {
 #[tauri::command]
 fn save_groq_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
     let store = app.store("store.json").map_err(|e| format!("Store error: {}", e))?;
-    store.set("groq_api_key", serde_json::Value::String(api_key.trim().to_string()));
+    let trimmed = api_key.trim();
+    if trimmed.is_empty() {
+        let _ = store.delete("groq_api_key");
+        println!("[Voce Auth] Groq API key removed from local store.");
+    } else {
+        store.set("groq_api_key", serde_json::Value::String(trimmed.to_string()));
+        println!("[Voce Auth] Groq API key securely saved to local store.");
+    }
     store.save().map_err(|e| format!("Failed to persist store: {}", e))?;
-    println!("[Voce Auth] Groq API key securely saved to local store.");
     Ok(())
 }
 
@@ -294,6 +300,7 @@ async fn execute_local_transcription(
     let transcript = json["text"].as_str().unwrap_or("").trim().to_string();
 
     println!("[Groq STT] Transcription result: \"{}\"", transcript);
+    let _ = app.emit("transcription-completed", serde_json::json!({ "text": &transcript }));
     Ok(transcript)
 }
 
@@ -378,6 +385,12 @@ async fn execute_local_translation(
         .to_string();
 
     println!("[Groq Translation] Translated result: \"{}\"", translated_text);
+    let _ = app.emit("translation-completed", serde_json::json!({
+        "source_text": &text,
+        "translated_text": &translated_text,
+        "source_lang": source_lang_hint,
+        "target_lang": target_lang,
+    }));
     Ok(translated_text)
 }
 
