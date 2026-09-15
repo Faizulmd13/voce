@@ -444,7 +444,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           <div className="p-3.5 rounded-lg bg-neutral-950/70 border border-neutral-800/50">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs font-mono text-neutral-400">Groq LLM</span>
-              <span className="text-[10px] font-mono text-emerald-400">llama-3.1-8b-instant</span>
+              <span className="text-[10px] font-mono text-emerald-400">llama-3.3-70b-versatile</span>
             </div>
             <div className="text-sm font-medium text-neutral-200">Multi-Language Translation</div>
             <p className="text-[11px] text-neutral-500 font-mono mt-1">Zero-shot high-accuracy text translation</p>

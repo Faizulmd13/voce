@@ -341,57 +341,81 @@ async fn execute_local_translation(
         format!("Source Language: {}\nTarget Language: {}\n\nText:\n{}", source_lang_hint, target_lang, text)
     };
 
-    let request_body = serde_json::json!({
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": user_prompt
-            }
-        ],
-        "temperature": 0.2,
-        "max_tokens": 2048
-    });
+    // Candidates in priority order: latest high-speed / versatile Groq models
+    let candidate_models = [
+        "llama-3.3-70b-versatile",
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.6-27b",
+        "llama-3.1-8b-instant",
+        "gemma2-9b-it",
+        "mixtral-8x7b-32768",
+    ];
 
     let client = reqwest::Client::new();
-    let res = client
-        .post("https://api.groq.com/openai/v1/chat/completions")
-        .header("Authorization", format!("Bearer {}", groq_key))
-        .header("Content-Type", "application/json")
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| format!("Groq Translation network request failed: {}", e))?;
+    let mut last_err = String::new();
 
-    if !res.status().is_success() {
-        let err_text = res.text().await.unwrap_or_default();
-        eprintln!("[Groq Translation] API error response: {}", err_text);
-        return Err(format!("Groq Translation error: {}", err_text));
+    for model_name in candidate_models {
+        let request_body = serde_json::json!({
+            "model": model_name,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt
+                }
+            ],
+            "temperature": 0.2,
+            "max_tokens": 2048
+        });
+
+        let res = client
+            .post("https://api.groq.com/openai/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", groq_key))
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await;
+
+        match res {
+            Ok(response) => {
+                let status = response.status();
+                if status.is_success() {
+                    if let Ok(json) = response.json::<serde_json::Value>().await {
+                        if let Some(content) = json["choices"][0]["message"]["content"].as_str() {
+                            let translated_text = content.trim().to_string();
+                            println!("[Groq Translation] Success using model '{}': \"{}\"", model_name, translated_text);
+                            let _ = app.emit("translation-completed", serde_json::json!({
+                                "source_text": &text,
+                                "translated_text": &translated_text,
+                                "source_lang": source_lang_hint,
+                                "target_lang": target_lang,
+                            }));
+                            return Ok(translated_text);
+                        }
+                    }
+                } else {
+                    let err_text = response.text().await.unwrap_or_default();
+                    eprintln!("[Groq Translation] Model '{}' returned {}: {}", model_name, status, err_text);
+                    if err_text.contains("model_not_found") || err_text.contains("does not exist") || err_text.contains("model_decommissioned") {
+                        last_err = format!("Model '{}' not available: {}", model_name, err_text);
+                        continue;
+                    } else {
+                        return Err(format!("Groq API error ({}): {}", status, err_text));
+                    }
+                }
+            }
+            Err(e) => {
+                last_err = format!("Network error connecting to Groq: {}", e);
+            }
+        }
     }
 
-    let json: serde_json::Value = res
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse Groq Translation response: {}", e))?;
-
-    let translated_text = json["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("")
-        .trim()
-        .to_string();
-
-    println!("[Groq Translation] Translated result: \"{}\"", translated_text);
-    let _ = app.emit("translation-completed", serde_json::json!({
-        "source_text": &text,
-        "translated_text": &translated_text,
-        "source_lang": source_lang_hint,
-        "target_lang": target_lang,
-    }));
-    Ok(translated_text)
+    Err(format!("Groq Translation failed across all candidate models. Last error: {}", last_err))
 }
 
 #[tauri::command]

@@ -29,7 +29,7 @@ const INITIAL_SETTINGS: UserSettings = {
   anonymouslySyncMetrics: false,
   targetLanguage: 'English',
   whisperModel: 'whisper-large-v3-turbo',
-  translationModel: 'llama-3.1-8b-instant',
+  translationModel: 'llama-3.3-70b-versatile',
   audioDevice: 'Default System Microphone',
   userProfile: {
     email: 'local.user@voce.internal',
