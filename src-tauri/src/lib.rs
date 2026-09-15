@@ -3,7 +3,6 @@ pub mod audio;
 use audio::AudioRecorder;
 use enigo::{Direction, Enigo, Key, Keyboard, Settings as EnigoSettings};
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{
@@ -57,100 +56,105 @@ pub struct AppSettingsState {
     pub auto_paste: Mutex<bool>,
 }
 
+use tauri_plugin_store::StoreExt;
+
 #[tauri::command]
 fn get_system_daemon_status() -> String {
     "active".to_string()
 }
 
-/// Helper to resolve cross-platform sidecar binary paths in dev & packaged production
-fn get_sidecar_path(app: &AppHandle, binary_name: &str) -> std::path::PathBuf {
-    // 1. Check bundled resource directory (Tauri production bundle)
-    if let Ok(res_dir) = app.path().resource_dir() {
-        let bin_res = res_dir.join("bins").join(format!("{}.exe", binary_name));
-        if bin_res.exists() {
-            return bin_res;
-        }
-        let bin_root = res_dir.join(format!("{}.exe", binary_name));
-        if bin_root.exists() {
-            return bin_root;
-        }
-    }
-
-    // 2. Check next to running executable
-    if let Ok(curr_exe) = std::env::current_exe() {
-        if let Some(parent) = curr_exe.parent() {
-            let p1 = parent.join(format!("{}.exe", binary_name));
-            if p1.exists() {
-                return p1;
-            }
-            let p2 = parent.join(format!("{}-x86_64-pc-windows-msvc.exe", binary_name));
-            if p2.exists() {
-                return p2;
+/// Helper to fetch the user's Groq API key securely from the local store or env override
+fn get_groq_api_key(app: &AppHandle) -> Result<String, String> {
+    if let Ok(store) = app.store("store.json") {
+        if let Some(val) = store.get("groq_api_key") {
+            if let Some(s) = val.as_str() {
+                let trimmed = s.trim();
+                if !trimmed.is_empty() {
+                    return Ok(trimmed.to_string());
+                }
             }
         }
     }
-
-    // 3. Check dev workspace directories
-    let cwd = std::env::current_dir().unwrap_or_default();
-    let dev_bin1 = cwd
-        .join("src-tauri")
-        .join("bins")
-        .join(format!("{}-x86_64-pc-windows-msvc.exe", binary_name));
-    if dev_bin1.exists() {
-        return dev_bin1;
+    if let Ok(env_key) = std::env::var("GROQ_API_KEY") {
+        let trimmed = env_key.trim();
+        if !trimmed.is_empty() {
+            return Ok(trimmed.to_string());
+        }
     }
-    let dev_bin2 = cwd
-        .join("bins")
-        .join(format!("{}-x86_64-pc-windows-msvc.exe", binary_name));
-    if dev_bin2.exists() {
-        return dev_bin2;
-    }
-
-    // 4. Check cargo target/debug directory
-    let target_bin = cwd
-        .join("src-tauri")
-        .join("target")
-        .join("debug")
-        .join(format!("{}.exe", binary_name));
-    if target_bin.exists() {
-        return target_bin;
-    }
-
-    std::path::PathBuf::from(format!("{}.exe", binary_name))
+    Err("No Groq API key configured. Please enter your API key on the welcome screen or in Settings.".to_string())
 }
 
-/// FLORES-200 / NLLB-200 language code normalizer
-pub fn map_to_nllb_lang_code(lang: &str) -> &'static str {
-    let lower = lang.trim().to_lowercase();
-    match lower.as_str() {
-        "english" | "en" | "eng" | "eng_latn" => "eng_Latn",
-        "spanish" | "es" | "spa" | "spa_latn" => "spa_Latn",
-        "french" | "fr" | "fra" | "fra_latn" => "fra_Latn",
-        "german" | "de" | "deu" | "deu_latn" => "deu_Latn",
-        "tamil" | "ta" | "tam" | "tam_taml" => "tam_Taml",
-        "hindi" | "hi" | "hin" | "hin_deva" => "hin_Deva",
-        "japanese" | "ja" | "jpn" | "jpn_jpan" => "jpn_Jpan",
-        "chinese" | "chinese (simplified)" | "chinese simplified" | "zh" | "zho" | "zho_hans" => "zho_Hans",
-        "chinese (traditional)" | "chinese traditional" | "zho_hant" => "zho_Hant",
-        "arabic" | "ar" | "ara" | "ara_arab" => "ara_Arab",
-        "russian" | "ru" | "rus" | "rus_cyrl" => "rus_Cyrl",
-        "italian" | "it" | "ita" | "ita_latn" => "ita_Latn",
-        "portuguese" | "pt" | "por" | "por_latn" => "por_Latn",
-        "dutch" | "nl" | "nld" | "nld_latn" => "nld_Latn",
-        "korean" | "ko" | "kor" | "kor_hang" => "kor_Hang",
-        "turkish" | "tr" | "tur" | "tur_latn" => "tur_Latn",
-        "polish" | "pl" | "pol" | "pol_latn" => "pol_Latn",
-        "vietnamese" | "vi" | "vie" | "vie_latn" => "vie_Latn",
-        "indonesian" | "id" | "ind" | "ind_latn" => "ind_Latn",
-        "bengali" | "bn" | "ben" | "ben_beng" => "ben_Beng",
-        "telugu" | "te" | "tel" | "tel_telu" => "tel_Telu",
-        "marathi" | "mr" | "mar" | "mar_deva" => "mar_Deva",
-        "urdu" | "ur" | "urd" | "urd_arab" => "urd_Arab",
-        "gujarati" | "gu" | "guj" | "guj_gujr" => "guj_Gujr",
-        "ukrainian" | "uk" | "ukr" | "ukr_cyrl" => "ukr_Cyrl",
-        "swedish" | "sv" | "swe" | "swe_latn" => "swe_Latn",
-        _ => "eng_Latn",
+#[tauri::command]
+fn get_stored_api_key(app: AppHandle) -> Result<Option<String>, String> {
+    if let Ok(store) = app.store("store.json") {
+        if let Some(val) = store.get("groq_api_key") {
+            if let Some(s) = val.as_str() {
+                let trimmed = s.trim();
+                if !trimmed.is_empty() {
+                    return Ok(Some(trimmed.to_string()));
+                }
+            }
+        }
     }
+    if let Ok(env_key) = std::env::var("GROQ_API_KEY") {
+        let trimmed = env_key.trim();
+        if !trimmed.is_empty() {
+            return Ok(Some(trimmed.to_string()));
+        }
+    }
+    Ok(None)
+}
+
+#[tauri::command]
+fn save_groq_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
+    let store = app.store("store.json").map_err(|e| format!("Store error: {}", e))?;
+    store.set("groq_api_key", serde_json::Value::String(api_key.trim().to_string()));
+    store.save().map_err(|e| format!("Failed to persist store: {}", e))?;
+    println!("[Voce Auth] Groq API key securely saved to local store.");
+    Ok(())
+}
+
+#[tauri::command]
+async fn validate_groq_api_key(api_key: String) -> Result<bool, String> {
+    let key = api_key.trim();
+    if key.is_empty() {
+        return Ok(false);
+    }
+    let client = reqwest::Client::new();
+    let res = client
+        .get("https://api.groq.com/openai/v1/models")
+        .header("Authorization", format!("Bearer {}", key))
+        .send()
+        .await
+        .map_err(|e| format!("Network request failed: {}", e))?;
+
+    Ok(res.status().is_success())
+}
+
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", &url])
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {}", e))?;
+    }
+    Ok(())
 }
 
 // Smart Screen Boundary Detection & Cursor Placement
@@ -244,7 +248,7 @@ fn stop_audio_recording(audio_state: State<'_, AppAudioState>) -> Result<String,
 
 #[tauri::command]
 async fn execute_local_transcription(
-    _app: AppHandle,
+    app: AppHandle,
     payload: DictationPayload,
 ) -> Result<String, String> {
     let wav_path = payload.audio_buffer_path.clone();
@@ -252,6 +256,8 @@ async fn execute_local_transcription(
         "[Groq STT] Executing cloud transcription on WAV buffer: {}",
         wav_path
     );
+
+    let groq_key = get_groq_api_key(&app)?;
 
     let file_bytes = std::fs::read(&wav_path)
         .map_err(|e| format!("Failed to read WAV file at {}: {}", wav_path, e))?;
@@ -265,10 +271,6 @@ async fn execute_local_transcription(
         .text("model", "whisper-large-v3-turbo")
         .part("file", part);
 
-    let groq_key = std::env::var("GROQ_API_KEY").unwrap_or_else(|_| {
-        format!("{}{}", "gsk_dKQoyMkIH1cjh2hqH9TR", "WGdyb3FYz4LnAwheNMOF8RBshzSBXF0o")
-    });
-
     let client = reqwest::Client::new();
     let res = client
         .post("https://api.groq.com/openai/v1/audio/transcriptions")
@@ -276,18 +278,18 @@ async fn execute_local_transcription(
         .multipart(form)
         .send()
         .await
-        .map_err(|e| format!("Groq API network request failed: {}", e))?;
+        .map_err(|e| format!("Groq STT network request failed: {}", e))?;
 
     if !res.status().is_success() {
         let err_text = res.text().await.unwrap_or_default();
         eprintln!("[Groq STT] API error response: {}", err_text);
-        return Err(format!("Groq API error: {}", err_text));
+        return Err(format!("Groq STT error: {}", err_text));
     }
 
     let json: serde_json::Value = res
         .json()
         .await
-        .map_err(|e| format!("Failed to parse Groq API JSON response: {}", e))?;
+        .map_err(|e| format!("Failed to parse Groq STT response: {}", e))?;
 
     let transcript = json["text"].as_str().unwrap_or("").trim().to_string();
 
@@ -314,84 +316,69 @@ async fn execute_local_translation(
         return Ok(String::new());
     }
 
-    let nllb_target_code = map_to_nllb_lang_code(&payload.target_lang);
-    let nllb_source_code = payload
-        .source_lang
-        .as_deref()
-        .map(|s| {
-            if s.eq_ignore_ascii_case("auto") || s.is_empty() {
-                "auto"
-            } else {
-                map_to_nllb_lang_code(s)
-            }
-        })
-        .unwrap_or("auto");
+    let target_lang = payload.target_lang.trim();
+    let source_lang_hint = payload.source_lang.as_deref().unwrap_or("auto");
 
     println!(
-        "[Translation Engine] Translating from [{}] into [{}] (token: {}): {}",
-        nllb_source_code, payload.target_lang, nllb_target_code, text
+        "[Groq Translation] Translating from [{}] into [{}]: {}",
+        source_lang_hint, target_lang, text
     );
 
-    let executable_path = get_sidecar_path(&app, "translator");
-    if !executable_path.exists() {
-        return Err(format!(
-            "Translator sidecar binary not found at {:?}",
-            executable_path
-        ));
+    let groq_key = get_groq_api_key(&app)?;
+
+    let system_prompt = "You are a professional translator. Translate the user's text into the requested target language. Output ONLY the translated text, no conversational filler.";
+
+    let user_prompt = if source_lang_hint.eq_ignore_ascii_case("auto") || source_lang_hint.is_empty() {
+        format!("Target Language: {}\n\nText:\n{}", target_lang, text)
+    } else {
+        format!("Source Language: {}\nTarget Language: {}\n\nText:\n{}", source_lang_hint, target_lang, text)
+    };
+
+    let request_body = serde_json::json!({
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user",
+                "content": user_prompt
+            }
+        ],
+        "temperature": 0.2,
+        "max_tokens": 2048
+    });
+
+    let client = reqwest::Client::new();
+    let res = client
+        .post("https://api.groq.com/openai/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", groq_key))
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| format!("Groq Translation network request failed: {}", e))?;
+
+    if !res.status().is_success() {
+        let err_text = res.text().await.unwrap_or_default();
+        eprintln!("[Groq Translation] API error response: {}", err_text);
+        return Err(format!("Groq Translation error: {}", err_text));
     }
 
-    // Locate models/nllb-200 directory if present
-    let mut model_dir = std::path::PathBuf::new();
-    if let Ok(res_dir) = app.path().resource_dir() {
-        let m = res_dir.join("models").join("nllb-200");
-        if m.exists() {
-            model_dir = m;
-        }
-    }
-    if !model_dir.exists() {
-        let m = std::env::current_dir()
-            .unwrap_or_default()
-            .join("src-tauri")
-            .join("models")
-            .join("nllb-200");
-        if m.exists() {
-            model_dir = m;
-        }
-    }
+    let json: serde_json::Value = res
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse Groq Translation response: {}", e))?;
 
-    let target_token = nllb_target_code.to_string();
-    let source_token = nllb_source_code.to_string();
-    let output = tokio::task::spawn_blocking(move || {
-        let mut cmd = Command::new(&executable_path);
-        cmd.arg("-t").arg(&target_token);
-        if source_token != "auto" {
-            cmd.arg("-s").arg(&source_token);
-        }
-        cmd.arg("-i").arg(&text);
-        if model_dir.exists() {
-            cmd.arg("-m").arg(&model_dir);
-        }
-        cmd.output()
-    })
-    .await
-    .map_err(|e| format!("Task execution error: {}", e))?
-    .map_err(|e| format!("Failed to execute translator sidecar: {}", e))?;
+    let translated_text = json["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("")
+        .trim()
+        .to_string();
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(format!("Translator sidecar error: {}", stderr));
-    }
-
-    let res = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if res.is_empty() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        if !stderr.is_empty() {
-            return Err(format!("Translator error: {}", stderr));
-        }
-        return Err("Translator sidecar returned empty result".to_string());
-    }
-
-    Ok(res)
+    println!("[Groq Translation] Translated result: \"{}\"", translated_text);
+    Ok(translated_text)
 }
 
 #[tauri::command]
@@ -696,7 +683,11 @@ pub fn run() {
             execute_local_translation,
             inject_text_to_cursor,
             start_google_oauth,
-            update_global_hotkeys
+            update_global_hotkeys,
+            get_stored_api_key,
+            save_groq_api_key,
+            validate_groq_api_key,
+            open_external_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running voce application");

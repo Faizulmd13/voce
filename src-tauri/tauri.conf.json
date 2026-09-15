@@ -63,12 +63,6 @@
   "bundle": {
     "active": true,
     "targets": "nsis",
-    "resources": [
-      "models/nllb-200/*"
-    ],
-    "externalBin": [
-      "bins/translator"
-    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

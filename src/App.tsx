@@ -6,6 +6,7 @@ import { HistoryPage } from './pages/HistoryPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DictationOverlay } from './components/overlays/DictationOverlay';
 import { TranslationOverlay } from './components/overlays/TranslationOverlay';
+import { WelcomeScreen } from './components/WelcomeScreen';
 import { 
   loadPreferencesFromDb, 
   savePreferencesToDb, 
@@ -16,7 +17,8 @@ import {
 import { 
   triggerGoogleOAuth, 
   updateBackendHotkeys,
-  showOverlay 
+  showOverlay,
+  getStoredApiKey
 } from './services/tauri';
 import { listen } from '@tauri-apps/api/event';
 
@@ -26,8 +28,8 @@ const INITIAL_SETTINGS: UserSettings = {
   autoPasteToCursor: true,
   anonymouslySyncMetrics: false,
   targetLanguage: 'English',
-  whisperModel: 'ggml-base.en.bin',
-  translationModel: 'nllb-200-distilled-600M',
+  whisperModel: 'whisper-large-v3-turbo',
+  translationModel: 'llama-3.1-8b-instant',
   audioDevice: 'Default System Microphone',
   userProfile: {
     email: 'local.user@voce.internal',
@@ -80,6 +82,7 @@ export const App: React.FC = () => {
   }
 
   // Main Dashboard Window Route (/)
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [activePage, setActivePage] = useState<NavPage>('home');
   const [settings, setSettings] = useState<UserSettings>(INITIAL_SETTINGS);
   const [history, setHistory] = useState<TranslationRecord[]>(INITIAL_HISTORY);
@@ -94,6 +97,14 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     async function initDbAndShortcuts() {
+      // Check for saved Groq API Key
+      try {
+        const storedKey = await getStoredApiKey();
+        setHasApiKey(Boolean(storedKey && storedKey.trim().length > 0));
+      } catch {
+        setHasApiKey(false);
+      }
+
       const dbSettings = await loadPreferencesFromDb(INITIAL_SETTINGS);
       setSettings(dbSettings);
 
@@ -209,6 +220,18 @@ export const App: React.FC = () => {
     }
   };
 
+  if (hasApiKey === null) {
+    return (
+      <div className="flex h-screen w-screen bg-neutral-950 items-center justify-center">
+        <div className="w-6 h-6 border-2 border-emerald-500/20 border-t-emerald-400 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!hasApiKey) {
+    return <WelcomeScreen onComplete={() => setHasApiKey(true)} />;
+  }
+
   return (
     <div className="flex h-screen w-screen bg-neutral-950 text-neutral-100 overflow-hidden font-sans">
       {/* Global Left Sidebar */}
@@ -248,3 +271,4 @@ export const App: React.FC = () => {
 };
 
 export default App;
+

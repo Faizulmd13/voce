@@ -17,9 +17,22 @@ dist-ssr
 src-tauri/target
 src-tauri/gen
 *.pdb
-src-tauri/models/*.bin
-src-tauri/models/*.gguf
-src-tauri/models/nllb-200/
+
+# Local AI Models, Weights & Large Artifacts (Zero-Bloat Cloud Architecture)
+models/
+models/*
+src-tauri/models/
+src-tauri/models/*
+*.bin
+*.gguf
+*.onnx
+
+# Binary Executables & Sidecars
+bins/
+bins/*
+src-tauri/bins/
+src-tauri/bins/*
+*.exe
 
 # Editor directories and files
 .vscode/*
@@ -32,9 +45,9 @@ src-tauri/models/nllb-200/
 *.sln
 *.sw?
 
-# Environment files
+# Environment & Secret Keys
 .env
 .env.*
-!.env.example
-
-src-tauri/models/
+*.key
+*.pem
+secrets/

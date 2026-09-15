@@ -89,6 +89,22 @@ export async function injectTextToCursor(text: string): Promise<void> {
   await invoke('inject_text_to_cursor', { text });
 }
 
+export async function getStoredApiKey(): Promise<string | null> {
+  return await invoke<string | null>('get_stored_api_key');
+}
+
+export async function saveGroqApiKey(apiKey: string): Promise<void> {
+  await invoke('save_groq_api_key', { apiKey });
+}
+
+export async function validateGroqApiKey(apiKey: string): Promise<boolean> {
+  return await invoke<boolean>('validate_groq_api_key', { apiKey });
+}
+
+export async function openExternalUrl(url: string): Promise<void> {
+  await invoke('open_external_url', { url });
+}
+
 export async function showOverlay(label: 'stt-overlay' | 'translate-overlay', offsetY?: number): Promise<void> {
   await invoke('show_overlay', { label, offset_y: offsetY });
 }
@@ -96,3 +112,4 @@ export async function showOverlay(label: 'stt-overlay' | 'translate-overlay', of
 export async function hideOverlay(label: 'stt-overlay' | 'translate-overlay'): Promise<void> {
   await invoke('hide_overlay', { label });
 }
+

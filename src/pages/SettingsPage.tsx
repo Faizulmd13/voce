@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from '../components/Header';
 import { UserSettings } from '../types';
 import { 
@@ -10,10 +10,15 @@ import {
   User, 
   Check, 
   Sparkles,
-  Layers,
   LogOut,
-  LogIn
+  LogIn,
+  Key,
+  Zap,
+  Eye,
+  EyeOff,
+  ExternalLink
 } from 'lucide-react';
+import { getStoredApiKey, saveGroqApiKey, validateGroqApiKey, openExternalUrl } from '../services/tauri';
 
 interface SettingsPageProps {
   settings: UserSettings;
@@ -32,6 +37,36 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 }) => {
   const [editingHotkey, setEditingHotkey] = useState<'stt' | 'translate' | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [keySaveStatus, setKeySaveStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    getStoredApiKey().then((k) => {
+      if (k) setApiKeyInput(k);
+    });
+  }, []);
+
+  const handleSaveApiKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    setIsSavingKey(true);
+    setKeySaveStatus(null);
+    try {
+      const isValid = await validateGroqApiKey(apiKeyInput.trim());
+      if (isValid) {
+        await saveGroqApiKey(apiKeyInput.trim());
+        setKeySaveStatus('API key saved and verified successfully!');
+        setTimeout(() => setKeySaveStatus(null), 3500);
+      } else {
+        setKeySaveStatus('Validation failed: Invalid Groq API key.');
+      }
+    } catch (err: any) {
+      setKeySaveStatus(`Error saving key: ${err?.message || err}`);
+    } finally {
+      setIsSavingKey(false);
+    }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent, type: 'stt' | 'translate') => {
     e.preventDefault();
@@ -253,37 +288,105 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
       </div>
 
-      {/* Local AI Models & Sidecar Engine Status */}
-      <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-5 space-y-4">
+      {/* Groq Cloud AI BYOK Configuration */}
+      <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-5 space-y-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-emerald-500" />
+            <Key className="w-4 h-4 text-emerald-500" />
             <h2 className="text-sm font-semibold text-neutral-200 uppercase font-mono tracking-wider">
-              Local AI Engine Bundles
+              Groq Cloud AI (BYOK)
             </h2>
           </div>
-          <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-            OFFLINE READY
+          <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1">
+            <Zap className="w-3 h-3" />
+            CLOUD ACCELERATED
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <p className="text-xs text-neutral-400 font-sans leading-relaxed">
+          Voce uses Groq's high-speed LPU infrastructure for instant Whisper STT and Llama 3.1 translation. Your key is stored securely in your local application data directory.
+        </p>
+
+        <div className="space-y-3 pt-1">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative flex-1">
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                value={apiKeyInput}
+                onChange={(e) => {
+                  setApiKeyInput(e.target.value);
+                  setKeySaveStatus(null);
+                }}
+                placeholder="gsk_..."
+                className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-500 rounded-lg px-3.5 py-2 text-xs font-mono text-neutral-100 pr-10 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 p-1"
+              >
+                {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+
+            <button
+              onClick={handleSaveApiKey}
+              disabled={isSavingKey || !apiKeyInput.trim()}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-neutral-950 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 shrink-0"
+            >
+              {isSavingKey ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-neutral-950/30 border-t-neutral-950 rounded-full animate-spin" />
+                  <span>Verifying...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Update Key</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={async () => {
+                try {
+                  await openExternalUrl('https://console.groq.com/keys');
+                } catch {
+                  window.open('https://console.groq.com/keys', '_blank');
+                }
+              }}
+              className="px-3 py-2 bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-300 text-xs font-mono rounded-lg transition-colors flex items-center justify-center gap-1.5 shrink-0"
+            >
+              <span>Get Free Key</span>
+              <ExternalLink className="w-3 h-3 text-neutral-500" />
+            </button>
+          </div>
+
+          {keySaveStatus && (
+            <div className={`text-xs font-mono ${keySaveStatus.includes('successfully') ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {keySaveStatus}
+            </div>
+          )}
+        </div>
+
+        {/* Model cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
           <div className="p-3.5 rounded-lg bg-neutral-950/70 border border-neutral-800/50">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs font-mono text-neutral-400">whisper.cpp</span>
-              <span className="text-[10px] font-mono text-emerald-400">142 MB</span>
+              <span className="text-xs font-mono text-neutral-400">Groq STT</span>
+              <span className="text-[10px] font-mono text-emerald-400">whisper-large-v3-turbo</span>
             </div>
-            <div className="text-sm font-medium text-neutral-200">ggml-base.en.bin</div>
-            <p className="text-[11px] text-neutral-500 font-mono mt-1">High-speed English STT model</p>
+            <div className="text-sm font-medium text-neutral-200">Studio Speech-to-Text</div>
+            <p className="text-[11px] text-neutral-500 font-mono mt-1">Sub-second transcription with anti-aliased DSP</p>
           </div>
 
           <div className="p-3.5 rounded-lg bg-neutral-950/70 border border-neutral-800/50">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs font-mono text-neutral-400">CTranslate2</span>
-              <span className="text-[10px] font-mono text-emerald-400">320 MB</span>
+              <span className="text-xs font-mono text-neutral-400">Groq LLM</span>
+              <span className="text-[10px] font-mono text-emerald-400">llama-3.1-8b-instant</span>
             </div>
-            <div className="text-sm font-medium text-neutral-200">nllb-200-distilled-600M</div>
-            <p className="text-[11px] text-neutral-500 font-mono mt-1">Quantized 200-language translation</p>
+            <div className="text-sm font-medium text-neutral-200">Multi-Language Translation</div>
+            <p className="text-[11px] text-neutral-500 font-mono mt-1">Zero-shot high-accuracy text translation</p>
           </div>
         </div>
       </div>

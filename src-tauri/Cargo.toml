@@ -14,14 +14,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "voce"
 path = "src/main.rs"
 
-[[bin]]
-name = "whisper"
-path = "src/bin/whisper.rs"
-
-[[bin]]
-name = "translator"
-path = "src/bin/translator.rs"
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
