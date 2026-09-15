@@ -262,31 +262,28 @@ async fn execute_local_transcription(
     }
 
     // Locate whisper model ggml-base.en.bin if present
-    let mut model_path = std::path::PathBuf::new();
+    let mut model_path = "models/ggml-base.en.bin".to_string();
     if let Ok(res_dir) = app.path().resource_dir() {
         let m = res_dir.join("models").join("ggml-base.en.bin");
         if m.exists() {
-            model_path = m;
+            model_path = m.to_string_lossy().to_string();
         }
     }
-    if !model_path.exists() {
+    if !std::path::Path::new(&model_path).exists() {
         let m = std::env::current_dir()
             .unwrap_or_default()
             .join("src-tauri")
             .join("models")
             .join("ggml-base.en.bin");
         if m.exists() {
-            model_path = m;
+            model_path = m.to_string_lossy().to_string();
         }
     }
 
     let output = tokio::task::spawn_blocking(move || {
-        let mut cmd = Command::new(&executable_path);
-        cmd.arg("-f").arg(&wav_path);
-        if model_path.exists() {
-            cmd.arg("-m").arg(&model_path);
-        }
-        cmd.output()
+        Command::new(&executable_path)
+            .args(["-m", &model_path, "-nt", "-f", &wav_path])
+            .output()
     })
     .await
     .map_err(|e| format!("Task execution error: {}", e))?
@@ -297,8 +294,8 @@ async fn execute_local_transcription(
         return Err(format!("Whisper sidecar error: {}", stderr));
     }
 
-    let res = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if res.is_empty() {
+    let transcript = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if transcript.is_empty() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         if !stderr.is_empty() {
             return Err(format!("Whisper error: {}", stderr));
@@ -306,7 +303,7 @@ async fn execute_local_transcription(
         return Err("Whisper sidecar returned empty transcript".to_string());
     }
 
-    Ok(res)
+    Ok(transcript)
 }
 
 #[tauri::command]

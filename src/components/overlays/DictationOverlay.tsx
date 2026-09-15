@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Check, X, Loader2 } from 'lucide-react';
 import { 
   startAudioRecording, 
@@ -28,7 +28,41 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
   const [transcript, setTranscript] = useState('');
   const [recordingSeconds, setRecordingSeconds] = useState(0);
 
+  const stateRef = useRef<'listening' | 'transcribing' | 'success'>('listening');
+  const isProcessingRef = useRef<boolean>(false);
+  const timerRef = useRef<number | null>(null);
+
+  const setOverlayState = (s: 'listening' | 'transcribing' | 'success') => {
+    stateRef.current = s;
+    setState(s);
+  };
+
+  const startListeningSession = async () => {
+    isProcessingRef.current = false;
+    setOverlayState('listening');
+    setTranscript('');
+    setRecordingSeconds(0);
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    timerRef.current = window.setInterval(() => {
+      setRecordingSeconds((prev) => prev + 1);
+    }, 1000);
+
+    try {
+      await startAudioRecording();
+    } catch (e) {
+      console.error('Failed to start audio recording:', e);
+    }
+  };
+
   const handleDismiss = async () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    isProcessingRef.current = true;
     try {
       await stopAudioRecording();
     } catch {
@@ -40,74 +74,98 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
     if (onClose) {
       onClose();
     }
+    isProcessingRef.current = false;
   };
 
-  useEffect(() => {
-    // Start hardware audio capture via cpal immediately
-    startAudioRecording();
-    setState('listening');
-    setTranscript('');
-    setRecordingSeconds(0);
-
-    const interval = setInterval(() => {
-      setRecordingSeconds((prev) => prev + 1);
-    }, 1000);
-
-    // Listen for backend trigger events
-    const unlistenPromise = listen('trigger-stt-overlay', () => {
-      startAudioRecording();
-      setState('listening');
-      setTranscript('');
-      setRecordingSeconds(0);
-    });
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        handleDismiss();
-      } else if (e.key === 'Enter' && state === 'listening') {
-        handleStopAndTranscribe();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('keydown', handleKeyDown);
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, []);
-
   const handleStopAndTranscribe = async () => {
-    setState('transcribing');
+    if (isProcessingRef.current || stateRef.current !== 'listening') return;
+    isProcessingRef.current = true;
+    setOverlayState('transcribing');
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
     try {
-      // 1. Stop audio recording and get 16kHz WAV file path
+      // 1. Stop audio recording and retrieve 16kHz WAV file path
       const wavPath = await stopAudioRecording();
 
-      // 2. Execute local whisper.cpp sidecar binary immediately (zero setTimeout)
+      // 2. Execute local speech recognition sidecar binary
       const result = await executeLocalTranscription(wavPath);
-      setTranscript(result);
-      setState('success');
+      
+      if (result && result.trim()) {
+        setTranscript(result);
+        setOverlayState('success');
 
-      if (onTranscriptionComplete) {
-        onTranscriptionComplete(result);
+        if (onTranscriptionComplete) {
+          onTranscriptionComplete(result);
+        }
+
+        // 3. Inject transcribed text directly into active OS cursor position
+        if (autoPaste) {
+          await injectTextToCursor(result);
+        }
+
+        // Dismiss overlay after brief confirmation
+        setTimeout(async () => {
+          if (isStandalone) {
+            await hideOverlay('stt-overlay');
+          } else if (onClose) {
+            onClose();
+          }
+          isProcessingRef.current = false;
+        }, 500);
+      } else {
+        // No speech detected, hide overlay cleanly
+        if (isStandalone) {
+          await hideOverlay('stt-overlay');
+        } else if (onClose) {
+          onClose();
+        }
+        isProcessingRef.current = false;
       }
-
-      // 3. Inject transcribed text directly into OS cursor position
-      if (autoPaste) {
-        await injectTextToCursor(result);
-      }
-
-      // Hide overlay
+    } catch (e) {
+      console.error('Transcription error:', e);
       if (isStandalone) {
         await hideOverlay('stt-overlay');
       } else if (onClose) {
         onClose();
       }
-    } catch (e) {
-      console.error('Transcription error:', e);
-      setState('listening');
+      isProcessingRef.current = false;
     }
   };
+
+  useEffect(() => {
+    // If not standalone or when mounted, start listening session
+    startListeningSession();
+
+    // Listen for backend trigger events
+    const unlistenPromise = listen('trigger-stt-overlay', () => {
+      startListeningSession();
+    });
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleDismiss();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (stateRef.current === 'listening' && !isProcessingRef.current) {
+          handleStopAndTranscribe();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      window.removeEventListener('keydown', handleKeyDown);
+      unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, []);
 
   if (!isOpen && !isStandalone) return null;
 
@@ -150,7 +208,7 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
               </div>
             ) : (
               <p className="text-xs text-neutral-200 truncate font-sans">
-                {transcript || 'Running whisper.cpp...'}
+                {transcript || 'Running speech recognition...'}
               </p>
             )}
           </div>
