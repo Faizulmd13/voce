@@ -496,9 +496,14 @@ fn trigger_stt_flow(app: &AppHandle) {
     let _ = app.emit("trigger-stt-overlay", ());
 }
 
-// Handle global Translation activation: copies highlighted text via Ctrl+C, sleeps 100ms, reads clipboard
+// Handle global Translation activation: copies highlighted text via Ctrl+C with stale protection
 fn trigger_translate_flow(app: &AppHandle) {
-    // 1. Simulate copy keystroke (Ctrl+C / Cmd+C) to capture highlighted text into OS clipboard
+    // 1. Clear system clipboard before triggering copy to protect against stale data
+    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+        let _ = clipboard.set_text("");
+    }
+
+    // 2. Simulate copy keystroke (Ctrl+C / Cmd+C) to capture highlighted text into OS clipboard
     if let Ok(mut enigo) = Enigo::new(&EnigoSettings::default()) {
         #[cfg(target_os = "macos")]
         {
@@ -514,10 +519,10 @@ fn trigger_translate_flow(app: &AppHandle) {
         }
     }
 
-    // 2. Allow OS clipboard to populate
+    // 3. Allow OS clipboard to populate
     std::thread::sleep(Duration::from_millis(100));
 
-    // 3. Read OS clipboard via arboard
+    // 4. Read OS clipboard via arboard
     let mut source_text = String::new();
     if let Ok(mut clipboard) = arboard::Clipboard::new() {
         if let Ok(text) = clipboard.get_text() {
@@ -525,7 +530,7 @@ fn trigger_translate_flow(app: &AppHandle) {
         }
     }
 
-    // 4. Show and position translation overlay
+    // 5. Show and position translation overlay
     position_window_at_cursor(app, "translate-overlay", 20);
 
     let target_lang = {
@@ -539,7 +544,7 @@ fn trigger_translate_flow(app: &AppHandle) {
 
     let event_data = TranslationEventData {
         source_text: source_text.clone(),
-        translated_text: source_text.clone(),
+        translated_text: String::new(),
         source_lang: "Auto-detected".to_string(),
         target_lang,
     };

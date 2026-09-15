@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Languages, Copy, Check, X, ArrowRight, CornerDownLeft, Sparkles, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Languages, Copy, Check, X, ArrowRight, CornerDownLeft, Sparkles, Loader2, Send } from 'lucide-react';
 import { TranslationRecord } from '../../types';
 import { 
-  getClipboardText, 
   executeLocalTranslation, 
   injectTextToCursor, 
   hideOverlay 
@@ -38,6 +37,8 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
   const [copied, setCopied] = useState(false);
   const [selectedTargetLang, setSelectedTargetLang] = useState(targetLanguage);
 
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const handleDismiss = async () => {
     if (isStandalone) {
       await hideOverlay('translate-overlay');
@@ -47,14 +48,15 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
     }
   };
 
-  const runTranslation = async (text: string, target: string, source: string = selectedSourceLang) => {
-    if (!text || !text.trim()) {
+  const runTranslation = async (text: string, target: string = selectedTargetLang, source: string = selectedSourceLang) => {
+    const trimmed = text.trim();
+    if (!trimmed) {
       setTranslatedText('');
       return;
     }
     setIsTranslating(true);
     try {
-      const translated = await executeLocalTranslation(text, target, source);
+      const translated = await executeLocalTranslation(trimmed, target, source);
       setTranslatedText(translated);
     } catch (e) {
       console.error('Translation error:', e);
@@ -65,57 +67,52 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
   };
 
   useEffect(() => {
-    // Automatically read highlighted text from OS clipboard on load
-    async function loadClipboard() {
-      try {
-        const clip = await getClipboardText();
-        if (clip && clip.trim()) {
-          setSourceText(clip);
-          await runTranslation(clip, selectedTargetLang, selectedSourceLang);
-        }
-      } catch (e) {
-        console.warn('Failed to load clipboard text:', e);
-      }
-    }
-
-    loadClipboard();
+    // Focus textarea on initial load
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 60);
 
     // Listen for backend translation trigger event with payload
     const unlistenPromise = listen<TranslationEventPayload>('trigger-translate-overlay', async (event) => {
       if (event.payload) {
-        setSourceText(event.payload.source_text);
+        const incomingText = (event.payload.source_text || '').trim();
         const trg = event.payload.target_lang || 'English';
         setSelectedTargetLang(trg);
-        await runTranslation(event.payload.source_text, trg, selectedSourceLang);
+
+        if (incomingText) {
+          setSourceText(incomingText);
+          // Automatically run translation for highlighted text captured from cursor
+          await runTranslation(incomingText, trg, selectedSourceLang);
+        } else {
+          // Stale-clipboard protected: blank input received
+          setSourceText('');
+          setTranslatedText('');
+          setTimeout(() => {
+            textareaRef.current?.focus();
+          }, 60);
+        }
       }
     });
 
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         handleDismiss();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleGlobalKeyDown);
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleGlobalKeyDown);
       unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 
-  const handleSourceTextChange = async (text: string) => {
-    setSourceText(text);
-    await runTranslation(text, selectedTargetLang, selectedSourceLang);
-  };
-
-  const handleSourceLangChange = async (source: string) => {
-    setSelectedSourceLang(source);
-    await runTranslation(sourceText, selectedTargetLang, source);
-  };
-
-  const handleTargetLangChange = async (target: string) => {
-    setSelectedTargetLang(target);
-    await runTranslation(sourceText, target, selectedSourceLang);
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Trigger manual translation on Enter (without Shift) or Ctrl+Enter
+    if ((e.ctrlKey && e.key === 'Enter') || (e.key === 'Enter' && !e.shiftKey)) {
+      e.preventDefault();
+      runTranslation(sourceText, selectedTargetLang, selectedSourceLang);
+    }
   };
 
   const handleCopy = () => {
@@ -156,7 +153,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
 
   return (
     <div className={`w-full h-full flex items-center justify-center ${isStandalone ? 'bg-transparent' : 'fixed inset-0 z-50 bg-black/45 backdrop-blur-sm p-4'}`}>
-      {/* Root Modal Container: Uniform background, border, and rounded corners */}
+      {/* Root Modal Container */}
       <div className="w-full h-full bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden p-3.5 shadow-2xl flex flex-col justify-between space-y-2.5 select-none">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
@@ -172,7 +169,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
               {/* Interactive Source Language Dropdown */}
               <select
                 value={selectedSourceLang}
-                onChange={(e) => handleSourceLangChange(e.target.value)}
+                onChange={(e) => setSelectedSourceLang(e.target.value)}
                 className="bg-neutral-900 border border-neutral-800 text-neutral-300 text-[10px] font-mono rounded px-1.5 py-0.5 focus:outline-none focus:border-neutral-700"
                 title="Source Language"
               >
@@ -196,7 +193,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
               {/* Target Language Dropdown */}
               <select
                 value={selectedTargetLang}
-                onChange={(e) => handleTargetLangChange(e.target.value)}
+                onChange={(e) => setSelectedTargetLang(e.target.value)}
                 className="bg-neutral-900 border border-neutral-800 text-emerald-400 text-[10px] font-mono rounded px-1.5 py-0.5 focus:outline-none focus:border-neutral-700"
                 title="Target Language"
               >
@@ -225,15 +222,45 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
           </div>
         </div>
 
-        {/* Source Text Box */}
-        <div className="space-y-1">
-          <textarea
-            value={sourceText}
-            onChange={(e) => handleSourceTextChange(e.target.value)}
-            rows={2}
-            className="w-full bg-neutral-900/90 border border-neutral-800 rounded-lg p-2 text-xs text-neutral-300 font-sans focus:outline-none focus:border-neutral-700 resize-none leading-relaxed"
-            placeholder="Selected source text..."
-          />
+        {/* Source Text Input Box */}
+        <div className="space-y-1.5">
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              autoFocus
+              value={sourceText}
+              onChange={(e) => setSourceText(e.target.value)}
+              onKeyDown={handleTextareaKeyDown}
+              rows={2}
+              className="w-full bg-neutral-900/90 border border-neutral-800 focus:border-emerald-500/80 rounded-lg p-2 text-xs text-neutral-200 font-sans focus:outline-none resize-none leading-relaxed transition-colors placeholder:text-neutral-600"
+              placeholder="Type or paste text to translate... (Press Enter to translate)"
+            />
+          </div>
+
+          {/* Manual Translate Action Button Row */}
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono text-neutral-500">
+              Press <kbd className="text-neutral-300 bg-neutral-900 px-1 py-0.5 rounded border border-neutral-800">Enter</kbd> or <kbd className="text-neutral-300 bg-neutral-900 px-1 py-0.5 rounded border border-neutral-800">Ctrl+Enter</kbd> to translate
+            </span>
+            <button
+              type="button"
+              onClick={() => runTranslation(sourceText, selectedTargetLang, selectedSourceLang)}
+              disabled={isTranslating || !sourceText.trim()}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold font-mono bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-neutral-950 transition-all shadow-sm shadow-emerald-950/40"
+            >
+              {isTranslating ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Translating...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-3 h-3" />
+                  <span>Translate</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Translated Text Box */}
@@ -243,19 +270,19 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
               Output ({selectedTargetLang})
             </span>
             <span className="text-[9px] font-mono text-emerald-400 flex items-center gap-1">
-              <Sparkles className="w-2.5 h-2.5" /> CTranslate2 Local
+              <Sparkles className="w-2.5 h-2.5" /> Groq Cloud AI
             </span>
           </div>
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-xs text-neutral-100 font-sans leading-relaxed min-h-[42px] flex items-center">
             {isTranslating ? (
-              <span className="text-neutral-500 font-mono text-[11px] flex items-center gap-1.5">
+              <span className="text-neutral-400 font-mono text-[11px] flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
-                Translating buffer...
+                Translating via Groq...
               </span>
             ) : (
               translatedText || (
                 <span className="text-neutral-500 font-sans text-xs italic">
-                  {sourceText ? 'Ready to translate' : 'Highlight text or type above to translate...'}
+                  {sourceText.trim() ? 'Click Translate or press Enter to translate' : 'Waiting for input...'}
                 </span>
               )
             )}
@@ -267,15 +294,19 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
           <span className="text-[9px] font-mono text-neutral-500">Esc to close</span>
           <div className="flex items-center gap-1.5">
             <button
+              type="button"
               onClick={handleCopy}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono text-neutral-300 hover:text-neutral-100 bg-neutral-900 border border-neutral-800 transition-colors"
+              disabled={!translatedText}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono text-neutral-300 hover:text-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed bg-neutral-900 border border-neutral-800 transition-colors"
             >
               {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
               <span>{copied ? 'Copied' : 'Copy'}</span>
             </button>
             <button
+              type="button"
               onClick={handleInsertAtCursor}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-mono font-medium text-neutral-950 bg-emerald-400 hover:bg-emerald-300 transition-colors shadow-sm"
+              disabled={!translatedText}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-mono font-medium text-neutral-950 bg-emerald-400 hover:bg-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
               <CornerDownLeft className="w-3 h-3" />
               <span>Insert to Cursor</span>
