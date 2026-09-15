@@ -341,13 +341,13 @@ async fn execute_local_translation(
         format!("Source Language: {}\nTarget Language: {}\n\nText:\n{}", source_lang_hint, target_lang, text)
     };
 
-    // Candidates in priority order: latest high-speed / versatile Groq models
+    // Candidates in priority order: verified working Groq production models
     let candidate_models = [
-        "llama-3.3-70b-versatile",
-        "meta-llama/llama-4-scout-17b-16e-instruct",
         "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
         "qwen/qwen3.6-27b",
+        "llama-3.3-70b-versatile",
+        "meta-llama/llama-4-scout-17b-16e-instruct",
         "llama-3.1-8b-instant",
         "gemma2-9b-it",
         "mixtral-8x7b-32768",
@@ -496,42 +496,66 @@ fn trigger_stt_flow(app: &AppHandle) {
     let _ = app.emit("trigger-stt-overlay", ());
 }
 
-// Handle global Translation activation: copies highlighted text via Ctrl+C with stale protection
+// Handle global Translation activation: captures highlighted text non-destructively without focus stealing
 fn trigger_translate_flow(app: &AppHandle) {
-    // 1. Clear system clipboard before triggering copy to protect against stale data
-    if let Ok(mut clipboard) = arboard::Clipboard::new() {
-        let _ = clipboard.set_text("");
-    }
+    // 1. Non-destructive Clipboard Backup: record current clipboard before keystroke
+    let original_clipboard = if let Ok(mut clipboard) = arboard::Clipboard::new() {
+        clipboard.get_text().unwrap_or_default()
+    } else {
+        String::new()
+    };
 
-    // 2. Simulate copy keystroke (Ctrl+C / Cmd+C) to capture highlighted text into OS clipboard
+    // 2. Simulate Keystroke Cleanly (Enigo): Release lingering modifiers to prevent shortcut collisions
     if let Ok(mut enigo) = Enigo::new(&EnigoSettings::default()) {
+        let _ = enigo.key(Key::Alt, Direction::Release);
+        let _ = enigo.key(Key::Shift, Direction::Release);
+        let _ = enigo.key(Key::Control, Direction::Release);
+        let _ = enigo.key(Key::Meta, Direction::Release);
+
+        std::thread::sleep(Duration::from_millis(50));
+
         #[cfg(target_os = "macos")]
         {
             let _ = enigo.key(Key::Meta, Direction::Press);
-            let _ = enigo.key(Key::Unicode('c'), Direction::Click);
+            let _ = enigo.key(Key::Unicode('c'), Direction::Press);
+            let _ = enigo.key(Key::Unicode('c'), Direction::Release);
             let _ = enigo.key(Key::Meta, Direction::Release);
         }
         #[cfg(not(target_os = "macos"))]
         {
             let _ = enigo.key(Key::Control, Direction::Press);
-            let _ = enigo.key(Key::Unicode('c'), Direction::Click);
+            let _ = enigo.key(Key::Unicode('c'), Direction::Press);
+            let _ = enigo.key(Key::Unicode('c'), Direction::Release);
             let _ = enigo.key(Key::Control, Direction::Release);
         }
     }
 
-    // 3. Allow OS clipboard to populate
-    std::thread::sleep(Duration::from_millis(100));
+    // 3. Wait 150ms for OS clipboard buffer to populate
+    std::thread::sleep(Duration::from_millis(150));
 
-    // 4. Read OS clipboard via arboard
-    let mut source_text = String::new();
-    if let Ok(mut clipboard) = arboard::Clipboard::new() {
-        if let Ok(text) = clipboard.get_text() {
-            source_text = text.trim().to_string();
-        }
-    }
+    // 4. Verify and Handle State
+    let new_clipboard = if let Ok(mut clipboard) = arboard::Clipboard::new() {
+        clipboard.get_text().unwrap_or_default()
+    } else {
+        String::new()
+    };
 
-    // 5. Show and position translation overlay
+    let source_text = if !new_clipboard.trim().is_empty() && new_clipboard != original_clipboard {
+        // Text was selected and copied
+        new_clipboard.trim().to_string()
+    } else {
+        // No new text was selected; keep clipboard intact and send blank input
+        String::new()
+    };
+
+    // 5. Display Overlay: Only show, unminimize, and focus window after copy attempt completes
     position_window_at_cursor(app, "translate-overlay", 20);
+
+    if let Some(win) = app.get_webview_window("translate-overlay") {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
 
     let target_lang = {
         let settings: State<'_, AppSettingsState> = app.state();
