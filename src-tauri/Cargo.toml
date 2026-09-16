@@ -34,6 +34,8 @@ enigo = "0.3"
 arboard = "3.4"
 rubato = "5.0.0"
 reqwest = { version = "0.13.5", features = ["multipart", "json"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+dotenvy = "0.15"
 
 [profile.release]
 panic = "abort"

@@ -48,6 +48,14 @@ src-tauri/bins/*
 # Environment & Secret Keys
 .env
 .env.*
+!.env.example
 *.key
 *.pem
 secrets/
+
+# Local databases & Store caches
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+store.json

@@ -5897,7 +5897,9 @@ name = "voce"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "chrono",
  "cpal",
+ "dotenvy",
  "enigo",
  "hound",
  "reqwest",
