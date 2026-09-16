@@ -540,14 +540,12 @@ fn inject_text_to_cursor(app: AppHandle, text: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         let _ = enigo.key(Key::Control, Direction::Press);
-        std::thread::sleep(Duration::from_millis(20));
-        let _ = enigo.key(Key::Other(0x56), Direction::Press); // VK_V = 0x56
-        std::thread::sleep(Duration::from_millis(20));
-        let _ = enigo.key(Key::Other(0x56), Direction::Release);
-        std::thread::sleep(Duration::from_millis(20));
-        let _ = enigo.key(Key::Unicode('v'), Direction::Click);
+        std::thread::sleep(Duration::from_millis(40));  
+        let _ = enigo.key(Key::Unicode('v'), Direction::Click); 
+        std::thread::sleep(Duration::from_millis(20)); 
         let _ = enigo.key(Key::Control, Direction::Release);
     }
+
     #[cfg(target_os = "macos")]
     {
         let _ = enigo.key(Key::Meta, Direction::Press);
