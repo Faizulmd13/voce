@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavPage } from '../types';
-import { Home, History, Settings } from 'lucide-react';
+import { Home, Bookmark, History, Settings } from 'lucide-react';
 
 interface SidebarProps {
   activePage: NavPage;
@@ -25,7 +25,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate }) => {
           </div>
         </div>
 
-        {/* Navigation Group (Center): Vertical list containing links to Home and History */}
+        {/* Navigation Group: Home -> Bookmarks -> History */}
         <nav className="space-y-1.5">
           <button
             onClick={() => onNavigate('home')}
@@ -37,6 +37,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate }) => {
           >
             <Home className={`w-4 h-4 ${activePage === 'home' ? 'text-emerald-500' : 'text-neutral-500'}`} />
             <span>Home</span>
+          </button>
+
+          <button
+            onClick={() => onNavigate('bookmarks')}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              activePage === 'bookmarks'
+                ? 'bg-neutral-800/90 text-neutral-100 border border-neutral-700/50 shadow-sm'
+                : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40'
+            }`}
+          >
+            <Bookmark className={`w-4 h-4 ${activePage === 'bookmarks' ? 'text-emerald-500' : 'text-neutral-500'}`} />
+            <span>Bookmarks</span>
           </button>
 
           <button
@@ -53,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate }) => {
         </nav>
       </div>
 
-      {/* Footer Section: Contains ONLY the Settings link at the absolute bottom. No status toggles or active audio indicators permitted. */}
+      {/* Footer Section: Contains ONLY the Settings link at the bottom */}
       <div className="border-t border-neutral-800/60 pt-3">
         <button
           onClick={() => onNavigate('settings')}

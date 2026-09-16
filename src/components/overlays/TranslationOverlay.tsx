@@ -156,22 +156,27 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
       {/* Root Modal Container */}
       <div className="w-full h-full bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden p-3.5 shadow-2xl flex flex-col justify-between space-y-2.5 select-none">
         {/* Draggable Header */}
-        <div data-tauri-drag-region="true" className="flex items-center justify-between border-b border-neutral-800 pb-2 cursor-move">
-          <div data-tauri-drag-region="true" className="flex items-center gap-1.5 cursor-move">
+        <div 
+          data-tauri-drag-region="true" 
+          className="flex items-center justify-between border-b border-neutral-800 pb-2 select-none"
+          style={{ WebkitAppRegion: 'drag', userSelect: 'none', cursor: 'grab' } as any}
+        >
+          <div data-tauri-drag-region="true" className="flex items-center gap-1.5 select-none pointer-events-none">
             <Languages className="w-3.5 h-3.5 text-emerald-500 pointer-events-none" />
-            <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-300 font-semibold pointer-events-none">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-300 font-semibold pointer-events-none select-none">
               Live Translation
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1 text-[10px] font-mono">
+          <div className="flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as any}>
+            <div className="flex items-center gap-1 text-[10px] font-mono" style={{ WebkitAppRegion: 'no-drag' } as any}>
               {/* Interactive Source Language Dropdown */}
               <select
                 value={selectedSourceLang}
                 onChange={(e) => setSelectedSourceLang(e.target.value)}
                 className="bg-neutral-900 border border-neutral-800 text-neutral-300 text-[10px] font-mono rounded px-1.5 py-0.5 focus:outline-none focus:border-neutral-700"
                 title="Source Language"
+                style={{ WebkitAppRegion: 'no-drag' } as any}
               >
                 <option value="auto">Auto-detect</option>
                 <option value="English">English (eng_Latn)</option>
@@ -196,6 +201,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
                 onChange={(e) => setSelectedTargetLang(e.target.value)}
                 className="bg-neutral-900 border border-neutral-800 text-emerald-400 text-[10px] font-mono rounded px-1.5 py-0.5 focus:outline-none focus:border-neutral-700"
                 title="Target Language"
+                style={{ WebkitAppRegion: 'no-drag' } as any}
               >
                 <option value="English">English (eng_Latn)</option>
                 <option value="Spanish">Spanish (spa_Latn)</option>
@@ -216,6 +222,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
               onClick={handleDismiss}
               className="text-neutral-500 hover:text-neutral-300 p-0.5 rounded transition-colors"
               title="Close (Esc)"
+              style={{ WebkitAppRegion: 'no-drag' } as any}
             >
               <X className="w-3.5 h-3.5" />
             </button>

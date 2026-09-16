@@ -1,7 +1,7 @@
 import React from 'react';
 import { Header } from '../components/Header';
 import { AppMetrics, UserSettings, OverlayMode } from '../types';
-import { Activity, Mic, Languages, Play } from 'lucide-react';
+import { Activity, Mic, Languages, Bookmark, Play, User } from 'lucide-react';
 
 interface HomePageProps {
   metrics: AppMetrics;
@@ -19,7 +19,16 @@ export const HomePage: React.FC<HomePageProps> = ({ metrics, settings, onTrigger
         action={
           settings.userProfile.isAuthenticated ? (
             <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 shadow-sm">
-              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              {settings.userProfile.avatarUrl ? (
+                <img
+                  src={settings.userProfile.avatarUrl}
+                  alt={settings.userProfile.name}
+                  referrerPolicy="no-referrer"
+                  className="w-5 h-5 rounded-full object-cover border border-emerald-500/40"
+                />
+              ) : (
+                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              )}
               <div className="text-right">
                 <span className="text-xs font-medium text-neutral-200 block leading-tight">
                   {settings.userProfile.name}
@@ -31,7 +40,7 @@ export const HomePage: React.FC<HomePageProps> = ({ metrics, settings, onTrigger
             </div>
           ) : (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800">
-              <div className="w-2 h-2 rounded-full bg-neutral-600" />
+              <User className="w-3.5 h-3.5 text-neutral-500" />
               <span className="text-xs font-mono text-neutral-400">Local Anonymous Mode</span>
             </div>
           )
@@ -39,7 +48,6 @@ export const HomePage: React.FC<HomePageProps> = ({ metrics, settings, onTrigger
       />
 
       <div className="space-y-6">
-
         {/* Metric Analytics Display: Unified layout rows showing high-contrast, beautiful typography */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Total Words Dictated */}
@@ -139,6 +147,24 @@ export const HomePage: React.FC<HomePageProps> = ({ metrics, settings, onTrigger
               <div className="flex items-center gap-3">
                 <kbd className="px-2.5 py-1 rounded bg-neutral-900 border border-neutral-700 text-neutral-200 font-mono text-xs shadow-inner">
                   {settings.translateHotkey}
+                </kbd>
+                <span className="text-[11px] font-mono text-emerald-400">HOOKED</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 rounded-lg bg-neutral-950/60 border border-neutral-800/40">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded bg-neutral-900 border border-neutral-800 flex items-center justify-center text-emerald-400">
+                  <Bookmark className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-neutral-200 block">Bookmark Capture Trigger</span>
+                  <span className="text-xs text-neutral-500">Capture selection, save snippet to Google Drive vault (Voce/bookmarks)</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <kbd className="px-2.5 py-1 rounded bg-neutral-900 border border-neutral-700 text-neutral-200 font-mono text-xs shadow-inner">
+                  {settings.bookmarkHotkey || 'Alt+B'}
                 </kbd>
                 <span className="text-[11px] font-mono text-emerald-400">HOOKED</span>
               </div>

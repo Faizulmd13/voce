@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '../components/Header';
+import { ProfileCard } from '../components/ProfileCard';
 import { UserSettings } from '../types';
 import { 
   Keyboard, 
   Mic, 
   Languages, 
+  Bookmark,
   Check, 
   Key, 
   Zap, 
@@ -14,7 +16,14 @@ import {
   Trash2,
   X
 } from 'lucide-react';
-import { getStoredApiKey, saveGroqApiKey, validateGroqApiKey, openExternalUrl, isAutostartEnabled, setAutostartEnabled } from '../services/tauri';
+import { 
+  getStoredApiKey, 
+  saveGroqApiKey, 
+  validateGroqApiKey, 
+  openExternalUrl, 
+  isAutostartEnabled, 
+  setAutostartEnabled 
+} from '../services/tauri';
 
 interface SettingsPageProps {
   settings: UserSettings;
@@ -27,7 +36,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onUpdateSettings,
   onResetApiKey,
 }) => {
-  const [editingHotkey, setEditingHotkey] = useState<'stt' | 'translate' | null>(null);
+  const [editingHotkey, setEditingHotkey] = useState<'stt' | 'translate' | 'bookmark' | null>(null);
   const [recordedChord, setRecordedChord] = useState<string>('');
   
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -90,7 +99,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
-  const startRecording = (type: 'stt' | 'translate') => {
+  const startRecording = (type: 'stt' | 'translate' | 'bookmark') => {
     setEditingHotkey(type);
     setRecordedChord('');
   };
@@ -100,7 +109,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     setRecordedChord('');
   };
 
-  const handleHotkeyKeyDown = (e: React.KeyboardEvent, type: 'stt' | 'translate') => {
+  const handleHotkeyKeyDown = (e: React.KeyboardEvent, type: 'stt' | 'translate' | 'bookmark') => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -115,8 +124,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       if (recordedChord && !recordedChord.endsWith('...')) {
         if (type === 'stt') {
           onUpdateSettings({ sttHotkey: recordedChord });
-        } else {
+        } else if (type === 'translate') {
           onUpdateSettings({ translateHotkey: recordedChord });
+        } else if (type === 'bookmark') {
+          onUpdateSettings({ bookmarkHotkey: recordedChord });
         }
         setEditingHotkey(null);
         setRecordedChord('');
@@ -148,7 +159,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         formattedKey = rawKey.toUpperCase();
       }
 
-      // If user pressed a Function key without modifiers (e.g., F1-F12), that is also valid
       const fullChord = modifiers.length > 0 ? [...modifiers, formattedKey].join('+') : formattedKey;
       setRecordedChord(fullChord);
     }
@@ -158,6 +168,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Top Header Layout Primitive */}
       <Header category="Preferences" title="Settings" />
+
+      {/* ProfileCard Component at the very top */}
+      <ProfileCard 
+        userProfile={settings.userProfile} 
+        onProfileUpdate={(updated) => onUpdateSettings({ userProfile: updated })} 
+      />
 
       {/* App Preferences: Clean, inline layout rows */}
       <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl divide-y divide-neutral-800/50 shadow-sm">
@@ -192,7 +208,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   placeholder="Press key chord..."
                   onKeyDown={(e) => handleHotkeyKeyDown(e, 'stt')}
                   onBlur={() => {
-                    // Slight delay to prevent immediate blur cancellation on accidental click
                     setTimeout(() => {
                       if (editingHotkey === 'stt' && !recordedChord) {
                         cancelRecording();
@@ -276,6 +291,62 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </button>
             )}
             {editingHotkey === 'translate' && (
+              <span className="text-[10px] font-mono text-neutral-400">
+                Press <kbd className="text-emerald-400">Enter</kbd> to confirm • <kbd className="text-neutral-300">Esc</kbd> to cancel
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Bookmark Hotkey Row */}
+        <div className="p-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-neutral-950 border border-neutral-800 flex items-center justify-center text-emerald-400">
+              <Bookmark className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-sm font-medium text-neutral-200 block">Bookmark Capture Hotkey</span>
+              <span className="text-xs text-neutral-500">Captures highlighted text and opens bookmark creation overlay</span>
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1.5">
+            {editingHotkey === 'bookmark' ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  autoFocus
+                  readOnly
+                  value={recordedChord || ''}
+                  placeholder="Press key chord..."
+                  onKeyDown={(e) => handleHotkeyKeyDown(e, 'bookmark')}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      if (editingHotkey === 'bookmark' && !recordedChord) {
+                        cancelRecording();
+                      }
+                    }, 200);
+                  }}
+                  className="bg-neutral-950 border border-emerald-500 text-emerald-400 px-3.5 py-1.5 rounded-lg text-xs font-mono focus:outline-none text-center animate-pulse min-w-[160px] cursor-pointer shadow-sm shadow-emerald-500/20"
+                />
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  className="p-1.5 text-neutral-400 hover:text-neutral-200 bg-neutral-950 border border-neutral-800 rounded-lg transition-colors"
+                  title="Cancel (Esc)"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => startRecording('bookmark')}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-mono transition-colors group"
+              >
+                <Keyboard className="w-3.5 h-3.5 text-neutral-500 group-hover:text-emerald-400 transition-colors" />
+                <span>{settings.bookmarkHotkey || 'Alt+B'}</span>
+              </button>
+            )}
+            {editingHotkey === 'bookmark' && (
               <span className="text-[10px] font-mono text-neutral-400">
                 Press <kbd className="text-emerald-400">Enter</kbd> to confirm • <kbd className="text-neutral-300">Esc</kbd> to cancel
               </span>

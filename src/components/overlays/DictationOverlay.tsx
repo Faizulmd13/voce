@@ -171,9 +171,20 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
 
   return (
     <div className={`w-full h-full flex items-center justify-center ${isStandalone ? 'bg-transparent' : 'fixed inset-0 z-50 bg-black/40 backdrop-blur-sm p-4'}`}>
-      <div className="hud-pill rounded-xl px-4 py-3 w-full max-w-[340px] bg-neutral-950/95 border border-neutral-800 shadow-2xl flex items-center justify-between gap-3 select-none">
+      <div 
+        data-tauri-drag-region="true"
+        className="hud-pill rounded-xl px-4 py-3 w-full max-w-[340px] border border-white/10 shadow-2xl flex items-center justify-between gap-3 select-none"
+        style={{
+          backgroundColor: 'rgba(20, 20, 20, 0.5)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          userSelect: 'none',
+          cursor: 'grab',
+          WebkitAppRegion: 'drag',
+        } as any}
+      >
         {/* State Indicator */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 pointer-events-none select-none">
           <div
             className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all ${
               state === 'listening'
@@ -215,10 +226,11 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0" style={{ WebkitAppRegion: 'no-drag' } as any}>
           {state === 'listening' && (
             <button
               onClick={handleStopAndTranscribe}
+              style={{ WebkitAppRegion: 'no-drag' } as any}
               className="px-2.5 py-1 rounded-md text-[11px] font-mono font-medium text-neutral-950 bg-emerald-400 hover:bg-emerald-300 transition-colors shadow-sm"
             >
               Done
@@ -226,6 +238,7 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
           )}
           <button
             onClick={handleDismiss}
+            style={{ WebkitAppRegion: 'no-drag' } as any}
             className="text-neutral-500 hover:text-neutral-300 p-1 rounded transition-colors"
             title="Dismiss (Esc)"
           >
