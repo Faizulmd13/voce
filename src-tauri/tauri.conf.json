@@ -52,7 +52,21 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": false,
-        "resizable": false,
+        "resizable": true,
+        "shadow": false
+      },
+      {
+        "label": "bookmark-overlay",
+        "title": "Voce Bookmark",
+        "url": "/bookmark",
+        "width": 550,
+        "height": 320,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "resizable": true,
         "shadow": false
       }
     ],

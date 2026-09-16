@@ -1,6 +1,6 @@
-export type NavPage = 'home' | 'history' | 'settings';
+export type NavPage = 'home' | 'bookmarks' | 'history' | 'settings';
 
-export type OverlayMode = 'none' | 'stt' | 'translate';
+export type OverlayMode = 'none' | 'stt' | 'translate' | 'bookmark';
 
 export interface TranslationRecord {
   id: string;
@@ -26,16 +26,30 @@ export interface DictationRecord {
   durationMs: number;
 }
 
+export interface BookmarkItem {
+  id: string;
+  title?: string;
+  content: string;
+  source?: string;
+  created_at: string;
+  driveFileId?: string;
+}
+
 export interface UserProfile {
   email: string;
   name: string;
   avatarUrl?: string;
   isAuthenticated: boolean;
+  googleDriveConfigured?: boolean;
+  voceFolderId?: string;
+  bookmarksFolderId?: string;
+  translationsFolderId?: string;
 }
 
 export interface UserSettings {
   sttHotkey: string;
   translateHotkey: string;
+  bookmarkHotkey: string;
   autoPasteToCursor: boolean;
   anonymouslySyncMetrics: boolean;
   targetLanguage: string;

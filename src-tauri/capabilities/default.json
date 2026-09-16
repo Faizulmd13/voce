@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default permissions for Voce desktop app",
-  "windows": ["main", "stt-overlay", "translate-overlay"],
+  "windows": ["main", "stt-overlay", "translate-overlay", "bookmark-overlay"],
   "permissions": [
     "core:default",
     "global-shortcut:default",
