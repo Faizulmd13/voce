@@ -162,11 +162,10 @@ pub async fn execute_cloud_translation(
     };
 
     let candidate_models = [
-        "llama-3.1-8b-instant",
-        "llama-3.3-70b-versatile",
-        "llama-3.1-70b-versatile",
-        "gemma2-9b-it",
-        "mixtral-8x7b-32768",
+    "openai/gpt-oss-20b",    // Fastest default for translations
+    "openai/gpt-oss-120b",   // Heavy reasoning fallback
+    "qwen/qwen3.8-27b",      // Solid multi-lingual fallback
+    "groq/compound",         // Groq's agentic system fallback
     ];
 
     let client = reqwest::Client::new();
