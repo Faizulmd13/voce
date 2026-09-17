@@ -3,7 +3,7 @@ import { Mic, Check, X, Loader2 } from 'lucide-react';
 import { 
   startAudioRecording, 
   stopAudioRecording, 
-  executeLocalTranscription, 
+  executeCloudTranscription, 
   injectTextToCursor,
   hideOverlay 
 } from '../../services/tauri';
@@ -91,8 +91,8 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
       // 1. Stop audio recording and retrieve 16kHz WAV file path
       const wavPath = await stopAudioRecording();
 
-      // 2. Execute local speech recognition sidecar binary
-      const result = await executeLocalTranscription(wavPath);
+      // 2. Execute cloud speech recognition
+      const result = await executeCloudTranscription(wavPath);
       
       if (result && result.trim()) {
         setTranscript(result);

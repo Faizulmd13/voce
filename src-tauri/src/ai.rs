@@ -77,7 +77,7 @@ pub async fn validate_groq_api_key(api_key: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub async fn execute_local_transcription(
+pub async fn execute_cloud_transcription(
     app: AppHandle,
     payload: DictationPayload,
 ) -> Result<String, String> {
@@ -89,8 +89,13 @@ pub async fn execute_local_transcription(
 
     let groq_key = get_groq_api_key(&app)?;
 
-    let file_bytes = std::fs::read(&wav_path)
-        .map_err(|e| format!("Failed to read WAV file at {}: {}", wav_path, e))?;
+    let file_bytes = std::fs::read(&wav_path).map_err(|e| {
+        let _ = std::fs::remove_file(&wav_path);
+        format!("Failed to read WAV file at {}: {}", wav_path, e)
+    })?;
+
+    // Purge temporary recording WAV file from OS temp directory immediately
+    let _ = std::fs::remove_file(&wav_path);
 
     let part = reqwest::multipart::Part::bytes(file_bytes)
         .file_name("dictation.wav")
@@ -129,7 +134,7 @@ pub async fn execute_local_transcription(
 }
 
 #[tauri::command]
-pub async fn execute_local_translation(
+pub async fn execute_cloud_translation(
     app: AppHandle,
     payload: TranslationPayload,
 ) -> Result<String, String> {
@@ -158,7 +163,6 @@ pub async fn execute_local_translation(
 
     let candidate_models = [
         "llama-3.1-8b-instant",
-        "openai/gpt-oss-120b",
         "llama-3.3-70b-versatile",
         "llama-3.1-70b-versatile",
         "gemma2-9b-it",

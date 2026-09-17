@@ -84,7 +84,6 @@ pub fn run() {
             auto_paste: Mutex::new(true),
         })
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -183,8 +182,8 @@ pub fn run() {
             windows::start_audio_recording,
             windows::stop_audio_recording,
             windows::open_external_url,
-            ai::execute_local_transcription,
-            ai::execute_local_translation,
+            ai::execute_cloud_transcription,
+            ai::execute_cloud_translation,
             ai::get_stored_api_key,
             ai::save_groq_api_key,
             ai::validate_groq_api_key,

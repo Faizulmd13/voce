@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Languages, Copy, Check, X, ArrowRight, CornerDownLeft, Sparkles, Loader2, Send } from 'lucide-react';
 import { TranslationRecord } from '../../types';
 import { 
-  executeLocalTranslation, 
+  executeCloudTranslation, 
   injectTextToCursor, 
   hideOverlay 
 } from '../../services/tauri';
@@ -66,7 +66,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
     lastTranslatedKeyRef.current = key;
     setIsTranslating(true);
     try {
-      const translated = await executeLocalTranslation(trimmed, target, source);
+      const translated = await executeCloudTranslation(trimmed, target, source);
       setTranslatedText(translated);
     } catch (e) {
       console.error('Translation error:', e);

@@ -2,7 +2,7 @@
 
 > **Ultra-Low Latency, Hotkey-Driven AI Desktop Assistant for Windows**
 
-Voce is an intelligent, local-first desktop assistant engineered with **Tauri (Rust)** and **React (TypeScript)**. It provides frictionless, system-wide access to high-performance AI inference powered by **Groq LPU**, seamless **Google Drive cloud synchronization**, instant voice-to-text dictation, and contextual selection translation.
+Voce is an intelligent, ultra-fast AI desktop assistant engineered with **Tauri v2 (Rust)** and **React 19 (TypeScript)**. It provides frictionless, system-wide access to high-performance cloud AI inference powered by **Groq LPU**, seamless **Google Drive cloud synchronization**, instant voice-to-text dictation, and contextual selection translation with local SQLite offline persistence.
 
 ---
 
@@ -15,7 +15,7 @@ Voce is an intelligent, local-first desktop assistant engineered with **Tauri (R
 
 - 🌐 **Instant Selection Translation (<kbd>Alt</kbd> + <kbd>T</kbd>)**:
   - Non-destructive synthetic clipboard capture of highlighted text across any application.
-  - Multi-language translation powered by LLaMA 3.1 8B Instant and versatile LLM models.
+  - Multi-language translation powered by LLaMA 3.1 8B Instant and versatile LLM models via Groq.
   - One-click copy, translation history logging, and live Google Drive backups.
 
 - 📑 **Knowledge Vault & Bookmarks (<kbd>Alt</kbd> + <kbd>B</kbd>)**:
@@ -24,11 +24,11 @@ Voce is an intelligent, local-first desktop assistant engineered with **Tauri (R
   - Bidirectional, deduplicated cloud synchronization directly to `Voce/bookmarks` on Google Drive as `.txt` files.
 
 - ☁️ **Google Drive Cloud Sync & OAuth 2.0**:
-  - Seamless local loopback OAuth 2.0 flow.
+  - Seamless local loopback OAuth 2.0 flow with strict `drive.file` scope.
   - Automatic synchronization on login and startup (`Voce/bookmarks` and `Voce/translations`).
-  - Offline-first resilience with local SQLite database and Tauri store caching.
+  - Offline-first resilience with local SQLite database (`history` and `bookmarks` tables) and multi-tier caching.
 
-- 📊 **Local-First & Anonymous Telemetry**:
+- 📊 **Offline Metrics & Anonymous Telemetry**:
   - Offline metrics dashboard tracking total dictated words and translated characters.
   - Zero personal data collection with anonymous Firebase usage counters.
 
@@ -127,19 +127,30 @@ voce/
 │   │       ├── BookmarkOverlay.tsx   # Floating snippet capture modal
 │   │       ├── DictationOverlay.tsx  # Floating audio recording visualizer
 │   │       └── TranslationOverlay.tsx# Floating selection translator
+│   ├── hooks/
+│   │   ├── useSync.ts            # Google Drive bidirectional synchronization hook
+│   │   └── useTauriEvents.ts     # Centralized Tauri IPC event listeners
 │   ├── pages/
 │   │   ├── HomePage.tsx          # System metrics and status dashboard
 │   │   ├── HistoryPage.tsx       # Searchable translation archive
 │   │   └── SettingsPage.tsx      # Hotkey, model, and API configuration
 │   ├── services/
+│   │   ├── cloud.ts              # Google Drive API & OAuth consent flow
 │   │   ├── db.ts                 # Local SQLite database operations
 │   │   └── tauri.ts              # Tauri IPC bridge invoke wrappers
 │   └── utils/
 │       └── firebase.ts           # Privacy-preserving anonymous telemetry
 ├── src-tauri/
 │   ├── src/
+│   │   ├── ai.rs                 # Groq cloud STT (Whisper) & translation engine
 │   │   ├── audio.rs              # High-performance CPAL audio engine
-│   │   ├── lib.rs                # Tauri backend, OAuth loopback & Drive sync
+│   │   ├── auth.rs               # Google OAuth 2.0 loopback server & token refresh
+│   │   ├── clipboard.rs          # Synthetic clipboard capture & auto-paste (arboard/enigo)
+│   │   ├── hotkeys.rs            # Global system shortcuts registration
+│   │   ├── models.rs             # Shared Rust data structures
+│   │   ├── sync.rs               # Google Drive sync & auto-healing deduplication
+│   │   ├── windows.rs            # Native multi-window overlay management
+│   │   ├── lib.rs                # Tauri backend setup & command router
 │   │   └── main.rs               # Desktop application entry point
 │   ├── tauri.conf.json           # Multi-window overlay configuration
 │   └── Cargo.toml                # Rust dependencies & build settings

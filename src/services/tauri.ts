@@ -60,8 +60,8 @@ export async function stopAudioRecording(): Promise<string> {
   return await invoke<string>('stop_audio_recording');
 }
 
-export async function executeLocalTranscription(audioBufferPath: string, model: string = 'whisper-large-v3-turbo'): Promise<string> {
-  return await invoke<string>('execute_local_transcription', {
+export async function executeCloudTranscription(audioBufferPath: string, model: string = 'whisper-large-v3-turbo'): Promise<string> {
+  return await invoke<string>('execute_cloud_transcription', {
     payload: {
       audio_buffer_path: audioBufferPath,
       model,
@@ -73,12 +73,12 @@ export async function getClipboardText(): Promise<string> {
   return await invoke<string>('get_clipboard_text');
 }
 
-export async function executeLocalTranslation(
+export async function executeCloudTranslation(
   sourceText: string,
   targetLang: string = 'English',
   sourceLang: string = 'auto'
 ): Promise<string> {
-  return await invoke<string>('execute_local_translation', {
+  return await invoke<string>('execute_cloud_translation', {
     payload: {
       source_text: sourceText,
       target_lang: targetLang,
