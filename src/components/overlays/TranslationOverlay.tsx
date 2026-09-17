@@ -38,6 +38,8 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
   const [selectedTargetLang, setSelectedTargetLang] = useState(targetLanguage);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inFlightRef = useRef(false);
+  const lastTranslatedKeyRef = useRef<string>('');
 
   const handleDismiss = async () => {
     if (isStandalone) {
@@ -54,6 +56,14 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
       setTranslatedText('');
       return;
     }
+
+    const key = `${source}->${target}:${trimmed}`;
+    if (inFlightRef.current && lastTranslatedKeyRef.current === key) {
+      return;
+    }
+
+    inFlightRef.current = true;
+    lastTranslatedKeyRef.current = key;
     setIsTranslating(true);
     try {
       const translated = await executeLocalTranslation(trimmed, target, source);
@@ -63,6 +73,7 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
       setTranslatedText('');
     } finally {
       setIsTranslating(false);
+      inFlightRef.current = false;
     }
   };
 
@@ -154,11 +165,11 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
   return (
     <div className={`w-full h-full flex items-center justify-center ${isStandalone ? 'bg-transparent' : 'fixed inset-0 z-50 bg-black/45 backdrop-blur-sm p-4'}`}>
       {/* Root Modal Container */}
-      <div className="w-full h-full bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden p-3.5 shadow-2xl flex flex-col justify-between space-y-2.5 select-none">
-        {/* Draggable Header */}
+      <div className="w-full h-full bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden p-3.5 shadow-2xl flex flex-col justify-between select-none">
+        {/* Draggable Header (Fixed) */}
         <div 
           data-tauri-drag-region="true" 
-          className="flex items-center justify-between border-b border-neutral-800 pb-2 select-none"
+          className="flex-shrink-0 flex items-center justify-between border-b border-neutral-800 pb-2 select-none"
           style={{ WebkitAppRegion: 'drag', userSelect: 'none', cursor: 'grab' } as any}
         >
           <div data-tauri-drag-region="true" className="flex items-center gap-1.5 select-none pointer-events-none">
@@ -229,75 +240,80 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
           </div>
         </div>
 
-        {/* Source Text Input Box */}
-        <div className="space-y-1.5">
-          <div className="relative">
-            <textarea
-              ref={textareaRef}
-              autoFocus
-              value={sourceText}
-              onChange={(e) => setSourceText(e.target.value)}
-              onKeyDown={handleTextareaKeyDown}
-              rows={2}
-              className="w-full bg-neutral-900/90 border border-neutral-800 focus:border-emerald-500/80 rounded-lg p-2 text-xs text-neutral-200 font-sans focus:outline-none resize-none leading-relaxed transition-colors placeholder:text-neutral-600"
-              placeholder="Type or paste text to translate... (Press Enter to translate)"
-            />
-          </div>
+        {/* Scrollable Middle Container */}
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-2 py-1.5 pr-1">
+          {/* Source Text Input Box */}
+          <div className="space-y-1.5">
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                autoFocus
+                value={sourceText}
+                onChange={(e) => setSourceText(e.target.value)}
+                onKeyDown={handleTextareaKeyDown}
+                rows={2}
+                className="w-full bg-neutral-900/90 border border-neutral-800 focus:border-emerald-500/80 rounded-lg p-2 text-xs text-neutral-200 font-sans focus:outline-none resize-none leading-relaxed transition-colors min-h-[48px] max-h-24 overflow-y-auto placeholder:text-neutral-600"
+                placeholder="Type or paste text to translate... (Press Enter to translate)"
+              />
+            </div>
 
-          {/* Manual Translate Action Button Row */}
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] font-mono text-neutral-500">
-              Press <kbd className="text-neutral-300 bg-neutral-900 px-1 py-0.5 rounded border border-neutral-800">Enter</kbd> or <kbd className="text-neutral-300 bg-neutral-900 px-1 py-0.5 rounded border border-neutral-800">Ctrl+Enter</kbd> to translate
-            </span>
-            <button
-              type="button"
-              onClick={() => runTranslation(sourceText, selectedTargetLang, selectedSourceLang)}
-              disabled={isTranslating || !sourceText.trim()}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold font-mono bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-neutral-950 transition-all shadow-sm shadow-emerald-950/40"
-            >
-              {isTranslating ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>Translating...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-3 h-3" />
-                  <span>Translate</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Translated Text Box */}
-        <div className="space-y-1 flex-1 flex flex-col justify-center">
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] font-mono uppercase tracking-wider text-neutral-500">
-              Output ({selectedTargetLang})
-            </span>
-            <span className="text-[9px] font-mono text-emerald-400 flex items-center gap-1">
-              <Sparkles className="w-2.5 h-2.5" /> Groq Cloud AI
-            </span>
-          </div>
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-xs text-neutral-100 font-sans leading-relaxed min-h-[42px] flex items-center">
-            {isTranslating ? (
-              <span className="text-neutral-400 font-mono text-[11px] flex items-center gap-1.5">
-                <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
-                Translating via Groq...
+            {/* Manual Translate Action Button Row */}
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-mono text-neutral-500">
+                Press <kbd className="text-neutral-300 bg-neutral-900 px-1 py-0.5 rounded border border-neutral-800">Enter</kbd> to translate
               </span>
-            ) : (
-              translatedText || (
-                <span className="text-neutral-500 font-sans text-xs italic">
-                  {sourceText.trim() ? 'Click Translate or press Enter to translate' : 'Waiting for input...'}
+              <button
+                type="button"
+                onClick={() => runTranslation(sourceText, selectedTargetLang, selectedSourceLang)}
+                disabled={isTranslating || !sourceText.trim()}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold font-mono bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-neutral-950 transition-all shadow-sm shadow-emerald-950/40"
+              >
+                {isTranslating ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Translating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3 h-3" />
+                    <span>Translate</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Translated Text Box */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-mono uppercase tracking-wider text-neutral-500">
+                Output ({selectedTargetLang})
+              </span>
+              <span className="text-[9px] font-mono text-emerald-400 flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5" /> Groq Cloud AI
+              </span>
+            </div>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-xs text-neutral-100 font-sans leading-relaxed min-h-[44px] max-h-28 overflow-y-auto flex items-start">
+              {isTranslating ? (
+                <span className="text-neutral-400 font-mono text-[11px] flex items-center gap-1.5 py-1">
+                  <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+                  Translating via Groq...
                 </span>
-              )
-            )}
+              ) : (
+                <div className="w-full select-text whitespace-pre-wrap">
+                  {translatedText || (
+                    <span className="text-neutral-500 font-sans text-xs italic">
+                      {sourceText.trim() ? 'Click Translate or press Enter to translate' : 'Waiting for input...'}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="pt-2 border-t border-neutral-800 flex items-center justify-between">
+        {/* Footer Actions (Fixed) */}
+        <div className="flex-shrink-0 pt-2 border-t border-neutral-800 flex items-center justify-between">
           <span className="text-[9px] font-mono text-neutral-500">Esc to close</span>
           <div className="flex items-center gap-1.5">
             <button

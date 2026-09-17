@@ -143,12 +143,12 @@ export const BookmarkOverlay: React.FC<BookmarkOverlayProps> = ({
       {/* Root Modal Container */}
       <div 
         onKeyDown={handleKeyDownForm}
-        className="w-full h-full bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden p-4 shadow-2xl flex flex-col justify-between space-y-3 select-none"
+        className="w-full h-full bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden p-4 shadow-2xl flex flex-col justify-between select-none"
       >
-        {/* Draggable Header */}
+        {/* Draggable Header (Fixed) */}
         <div 
           data-tauri-drag-region="true" 
-          className="flex items-center justify-between border-b border-neutral-800 pb-2.5 select-none"
+          className="flex-shrink-0 flex items-center justify-between border-b border-neutral-800 pb-2.5 select-none"
           style={{ WebkitAppRegion: 'drag', userSelect: 'none', cursor: 'grab' } as any}
         >
           <div data-tauri-drag-region="true" className="flex items-center gap-2 pointer-events-none select-none">
@@ -176,10 +176,10 @@ export const BookmarkOverlay: React.FC<BookmarkOverlayProps> = ({
           </div>
         </div>
 
-        {/* Input Fields */}
-        <div className="space-y-2.5 flex-1 flex flex-col">
+        {/* Scrollable Middle Container */}
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 py-1.5 pr-1 flex flex-col">
           {/* Title Input */}
-          <div>
+          <div className="flex-shrink-0">
             <input
               ref={titleRef}
               type="text"
@@ -191,7 +191,7 @@ export const BookmarkOverlay: React.FC<BookmarkOverlayProps> = ({
           </div>
 
           {/* Content Textarea */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 min-h-[75px] max-h-48 flex flex-col">
             <textarea
               ref={contentRef}
               required
@@ -199,12 +199,12 @@ export const BookmarkOverlay: React.FC<BookmarkOverlayProps> = ({
               placeholder="Snippet or note content (required)..."
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full flex-1 bg-neutral-900 border border-neutral-800 focus:border-emerald-500/80 rounded-lg p-3 text-xs text-neutral-200 font-sans leading-relaxed placeholder:text-neutral-600 focus:outline-none resize-none transition-colors"
+              className="w-full flex-1 min-h-[75px] max-h-48 overflow-y-auto bg-neutral-900 border border-neutral-800 focus:border-emerald-500/80 rounded-lg p-2.5 text-xs text-neutral-200 font-sans leading-relaxed placeholder:text-neutral-600 focus:outline-none resize-none transition-colors"
             />
           </div>
 
           {/* Source Link Input */}
-          <div className="relative">
+          <div className="flex-shrink-0 relative">
             <Link2 className="w-3.5 h-3.5 text-neutral-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -216,8 +216,8 @@ export const BookmarkOverlay: React.FC<BookmarkOverlayProps> = ({
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="pt-2 border-t border-neutral-800 flex items-center justify-between">
+        {/* Footer Actions (Fixed) */}
+        <div className="flex-shrink-0 pt-2 border-t border-neutral-800 flex items-center justify-between">
           <span className="text-[10px] font-mono text-neutral-500">
             Press <kbd className="text-neutral-300 bg-neutral-900 px-1 py-0.5 rounded border border-neutral-800">Ctrl+Enter</kbd> to save
           </span>

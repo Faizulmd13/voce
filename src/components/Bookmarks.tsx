@@ -22,17 +22,15 @@ import {
   deleteBookmarkFromDrive, 
   uploadBookmarkToDrive, 
   updateBookmarkInDrive,
-  syncFromCloud,
   openExternalUrl 
 } from '../services/tauri';
 import { 
   loadBookmarksFromDb, 
   insertBookmarkToDb, 
-  deleteBookmarkFromDb, 
-  syncBookmarksToDb, 
-  syncHistoryToDb,
-  loadHistoryFromDb 
+  deleteBookmarkFromDb
 } from '../services/db';
+
+import { listen } from '@tauri-apps/api/event';
 
 interface BookmarksProps {
   userProfile: UserProfile;
@@ -43,7 +41,6 @@ export const Bookmarks: React.FC<BookmarksProps> = ({ userProfile, onOpenOverlay
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -64,40 +61,39 @@ export const Bookmarks: React.FC<BookmarksProps> = ({ userProfile, onOpenOverlay
 
   const loadInitialData = async () => {
     setIsLoading(true);
-    // 1. Load local offline cache first for instantaneous rendering
+    // Load local offline cache for instantaneous rendering
     const cached = await loadBookmarksFromDb();
     setBookmarks(cached);
     setIsLoading(false);
-
-    // 2. If authenticated with Google Drive, sync from cloud in background
-    if (userProfile.isAuthenticated) {
-      handleSyncFromCloud();
-    }
-  };
-
-  const handleSyncFromCloud = async () => {
-    if (!userProfile.isAuthenticated) return;
-    setIsSyncing(true);
-    try {
-      const localBookmarks = await loadBookmarksFromDb();
-      const localHistory = await loadHistoryFromDb([]);
-      const res = await syncFromCloud(localBookmarks, localHistory);
-      if (res.bookmarks && res.bookmarks.length > 0) {
-        setBookmarks(res.bookmarks);
-        await syncBookmarksToDb(res.bookmarks);
-      }
-      if (res.translations && res.translations.length > 0) {
-        await syncHistoryToDb(res.translations as any);
-      }
-    } catch (e) {
-      console.warn('Failed to sync bookmarks from Google Drive:', e);
-    } finally {
-      setIsSyncing(false);
-    }
   };
 
   useEffect(() => {
     loadInitialData();
+
+    const unlistenLogout = listen('oauth-logout-success', () => {
+      setBookmarks([]);
+      setEditingBookmark(null);
+      setIsCreating(false);
+    });
+
+    const unlistenSync = listen<{ bookmarks: BookmarkItem[] }>('cloud-sync-completed', (event) => {
+      if (event.payload?.bookmarks) {
+        setBookmarks(event.payload.bookmarks);
+      }
+    });
+
+    const unlistenSaved = listen<BookmarkItem>('bookmark-saved', (event) => {
+      if (event.payload) {
+        const item = event.payload;
+        setBookmarks((prev) => [item, ...prev.filter((b) => b.id !== item.id && b.driveFileId !== item.driveFileId)]);
+      }
+    });
+
+    return () => {
+      unlistenLogout.then((fn) => fn());
+      unlistenSync.then((fn) => fn());
+      unlistenSaved.then((fn) => fn());
+    };
   }, [userProfile.isAuthenticated]);
 
   const handleCopy = (id: string, text: string, e?: React.MouseEvent) => {
@@ -306,20 +302,10 @@ export const Bookmarks: React.FC<BookmarksProps> = ({ userProfile, onOpenOverlay
         title="Bookmarks"
         action={
           <div className="flex items-center gap-2.5">
-            {userProfile.isAuthenticated ? (
-              <button
-                onClick={handleSyncFromCloud}
-                disabled={isSyncing}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-neutral-300 hover:text-emerald-400 bg-neutral-900 border border-neutral-800 transition-colors disabled:opacity-50"
-                title="Synchronize bookmarks with Google Drive"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-400' : ''}`} />
-                <span>{isSyncing ? 'Syncing...' : 'Drive Sync'}</span>
-              </button>
-            ) : (
+            {!userProfile.isAuthenticated && (
               <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-neutral-500">
                 <CloudOff className="w-3.5 h-3.5 text-neutral-600" />
-                <span>Offline Cache</span>
+                <span>Offline Mode</span>
               </div>
             )}
 
