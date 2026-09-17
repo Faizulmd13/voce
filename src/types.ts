@@ -10,6 +10,7 @@ export interface TranslationRecord {
   translatedText: string;
   targetLang: string;
   charCount: number;
+  driveFileId?: string;
 }
 
 export interface TranslationPayload {
