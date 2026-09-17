@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { NavPage, TranslationRecord, UserSettings, AppMetrics, UserProfile } from './types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { NavPage, TranslationRecord, BookmarkItem, UserSettings, AppMetrics, UserProfile } from './types';
 import { Sidebar } from './components/Sidebar';
 import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -13,11 +13,8 @@ import {
   loadPreferencesFromDb, 
   savePreferencesToDb, 
   loadHistoryFromDb, 
-  insertHistoryToDb, 
   clearHistoryInDb,
-  loadBookmarksFromDb,
-  syncBookmarksToDb,
-  syncHistoryToDb
+  deleteHistoryFromDb
 } from './services/db';
 import { 
   updateBackendHotkeys,
@@ -25,15 +22,13 @@ import {
   getStoredApiKey,
   saveGroqApiKey,
   getGoogleUserProfile,
-  syncFromCloud,
-  normalizeUserProfile
+  normalizeUserProfile,
+  deleteTranslationFromDrive,
+  clearAllTranslationsFromDrive
 } from './services/tauri';
-import { 
-  reportAppInstall, 
-  reportSttDictation, 
-  reportTranslation 
-} from './utils/firebase';
-import { listen } from '@tauri-apps/api/event';
+import { reportAppInstall } from './utils/firebase';
+import { useSync } from './hooks/useSync';
+import { useTauriEvents } from './hooks/useTauriEvents';
 
 const INITIAL_SETTINGS: UserSettings = {
   sttHotkey: 'Alt+Space',
@@ -87,8 +82,112 @@ export const App: React.FC = () => {
     lastActiveTimestamp: new Date().toISOString(),
   });
 
+  const { performCloudSync } = useSync();
+
+  const handleProfileSync = useCallback(
+    async (profile: UserProfile) => {
+      setSettings((prev) => {
+        const updated = { ...prev, userProfile: profile };
+        savePreferencesToDb(updated);
+        return updated;
+      });
+
+      if (profile.isAuthenticated) {
+        console.log('[App] Authenticated profile detected. Initiating bidirectional cloud sync...');
+        const syncRes = await performCloudSync();
+        if (syncRes.translations && syncRes.translations.length > 0) {
+          setHistory(syncRes.translations);
+          const totalChars = syncRes.translations.reduce(
+            (acc, curr) => acc + (curr.charCount || curr.sourceText.length),
+            0
+          );
+          setMetrics((prev) => ({
+            ...prev,
+            totalCharsTranslated: totalChars,
+            totalTranslationsCount: syncRes.translations.length,
+          }));
+        }
+      }
+    },
+    [performCloudSync]
+  );
+
+  const handleTranscription = useCallback((words: number) => {
+    setMetrics((prev) => ({
+      ...prev,
+      totalWordsDictated: prev.totalWordsDictated + words,
+      totalDictationsCount: prev.totalDictationsCount + 1,
+    }));
+  }, []);
+
+  const handleTranslation = useCallback((record: TranslationRecord) => {
+    setHistory((prev) => {
+      const isDuplicate = prev.some(
+        (h) => h.id === record.id || (h.sourceText.trim() === record.sourceText.trim() && h.translatedText.trim() === record.translatedText.trim())
+      );
+      if (isDuplicate) {
+        return prev;
+      }
+      return [record, ...prev];
+    });
+    setMetrics((prev) => ({
+      ...prev,
+      totalCharsTranslated: prev.totalCharsTranslated + record.charCount,
+      totalTranslationsCount: prev.totalTranslationsCount + 1,
+    }));
+  }, []);
+
+  const handleLoginSuccess = useCallback(
+    (profile: UserProfile) => {
+      handleProfileSync(profile);
+    },
+    [handleProfileSync]
+  );
+
+  const handleLogoutSuccess = useCallback((anon: UserProfile) => {
+    setSettings((prev) => {
+      const updated = { ...prev, userProfile: anon };
+      savePreferencesToDb(updated);
+      return updated;
+    });
+    setHistory([]);
+    setMetrics({
+      totalWordsDictated: 0,
+      totalCharsTranslated: 0,
+      totalDictationsCount: 0,
+      totalTranslationsCount: 0,
+      daemonStatus: 'active',
+      lastActiveTimestamp: new Date().toISOString(),
+    });
+  }, []);
+
+  const handleSyncCompleted = useCallback(async (payload?: { bookmarks?: BookmarkItem[]; translations?: TranslationRecord[] }) => {
+    let reloadedHistory = payload?.translations;
+    if (!reloadedHistory || reloadedHistory.length === 0) {
+      reloadedHistory = await loadHistoryFromDb([]);
+    }
+    setHistory(reloadedHistory);
+    const totalChars = reloadedHistory.reduce(
+      (acc, curr) => acc + (curr.charCount || curr.sourceText.length),
+      0
+    );
+    setMetrics((prev) => ({
+      ...prev,
+      totalCharsTranslated: totalChars,
+      totalTranslationsCount: reloadedHistory.length,
+    }));
+  }, []);
+
+  // Centralized Tauri IPC Events Hook
+  useTauriEvents({
+    onTranscription: handleTranscription,
+    onTranslation: handleTranslation,
+    onLoginSuccess: handleLoginSuccess,
+    onLogoutSuccess: handleLogoutSuccess,
+    onSyncCompleted: handleSyncCompleted,
+  });
+
   useEffect(() => {
-    // 1. Trigger anonymous Firebase install metric (only reported once per device)
     reportAppInstall();
 
     async function initDbAndShortcuts() {
@@ -102,29 +201,9 @@ export const App: React.FC = () => {
 
       const dbSettings = await loadPreferencesFromDb(INITIAL_SETTINGS);
 
-      // Check stored Google OAuth profile
-      try {
-        const rawProfile = await getGoogleUserProfile();
-        const googleProfile = normalizeUserProfile(rawProfile);
-        if (googleProfile && googleProfile.isAuthenticated) {
-          dbSettings.userProfile = googleProfile;
-          // Automatically trigger cloud sync in background on app start
-          handleProfileSync(googleProfile);
-        }
-      } catch (err) {
-        console.warn('Failed to load Google profile from store:', err);
-      }
-
-      setSettings(dbSettings);
-
+      // Load cached offline history first for instant UI response
       const dbHistory = await loadHistoryFromDb([]);
       setHistory(dbHistory);
-
-      await updateBackendHotkeys(
-        dbSettings.sttHotkey, 
-        dbSettings.translateHotkey, 
-        dbSettings.bookmarkHotkey || 'Alt+B'
-      );
 
       const totalChars = dbHistory.reduce((acc, curr) => acc + (curr.charCount || curr.sourceText.length), 0);
       setMetrics((prev) => ({
@@ -132,135 +211,30 @@ export const App: React.FC = () => {
         totalCharsTranslated: totalChars,
         totalTranslationsCount: dbHistory.length,
       }));
+
+      // Check stored Google OAuth profile & trigger bidirectional cloud sync if logged in
+      try {
+        const rawProfile = await getGoogleUserProfile();
+        const googleProfile = normalizeUserProfile(rawProfile);
+        if (googleProfile && googleProfile.isAuthenticated) {
+          dbSettings.userProfile = googleProfile;
+          await handleProfileSync(googleProfile);
+        }
+      } catch (err) {
+        console.warn('Failed to load Google profile from store:', err);
+      }
+
+      setSettings(dbSettings);
+
+      await updateBackendHotkeys(
+        dbSettings.sttHotkey, 
+        dbSettings.translateHotkey, 
+        dbSettings.bookmarkHotkey || 'Alt+B'
+      );
     }
 
-    // Define handleProfileSync before calling initDbAndShortcuts
-    const handleProfileSync = async (rawProfile: any) => {
-      const profile = normalizeUserProfile(rawProfile);
-      setSettings((prev) => {
-        const updated = { ...prev, userProfile: profile };
-        savePreferencesToDb(updated);
-        return updated;
-      });
-
-      if (profile.isAuthenticated) {
-        // Trigger bidirectional deduplicated sync automatically
-        try {
-          const localBookmarks = await loadBookmarksFromDb();
-          const localHistory = await loadHistoryFromDb([]);
-          const res = await syncFromCloud(localBookmarks, localHistory);
-          if (res.bookmarks && res.bookmarks.length > 0) {
-            await syncBookmarksToDb(res.bookmarks);
-          }
-          if (res.translations && res.translations.length > 0) {
-            await syncHistoryToDb(res.translations as any);
-            const reloadedHistory = await loadHistoryFromDb([]);
-            setHistory(reloadedHistory);
-            const totalChars = reloadedHistory.reduce((acc, curr) => acc + (curr.charCount || curr.sourceText.length), 0);
-            setMetrics((prev) => ({
-              ...prev,
-              totalCharsTranslated: totalChars,
-              totalTranslationsCount: reloadedHistory.length,
-            }));
-          }
-        } catch (cloudErr) {
-          console.warn('Bidirectional cloud sync warning:', cloudErr);
-        }
-      }
-    };
-
     initDbAndShortcuts();
-
-    // Listen for transcription completed events to dynamically update metrics and anonymous Firebase telemetry
-    const unlistenSttPromise = listen<{ text: string }>('transcription-completed', (event) => {
-      if (event.payload?.text) {
-        const words = event.payload.text.split(/\s+/).filter(Boolean).length;
-        setMetrics((prev) => ({
-          ...prev,
-          totalWordsDictated: prev.totalWordsDictated + words,
-          totalDictationsCount: prev.totalDictationsCount + 1,
-        }));
-        // Anonymous Firebase telemetry
-        reportSttDictation(words);
-      }
-    });
-
-    // Listen for translation completed events to dynamically update history, metrics, and anonymous telemetry
-    const unlistenTrnPromise = listen<{
-      source_text: string;
-      translated_text: string;
-      source_lang: string;
-      target_lang: string;
-    }>('translation-completed', async (event) => {
-      if (event.payload?.translated_text) {
-        const record: TranslationRecord = {
-          id: `trn-${Date.now()}`,
-          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          sourceText: event.payload.source_text,
-          sourceLang: event.payload.source_lang || 'Auto-detected',
-          translatedText: event.payload.translated_text,
-          targetLang: event.payload.target_lang || 'English',
-          charCount: event.payload.source_text.length,
-        };
-        setHistory((prev) => [record, ...prev]);
-        await insertHistoryToDb(record);
-        setMetrics((prev) => ({
-          ...prev,
-          totalCharsTranslated: prev.totalCharsTranslated + record.charCount,
-          totalTranslationsCount: prev.totalTranslationsCount + 1,
-        }));
-        // Anonymous Firebase telemetry
-        reportTranslation(record.charCount);
-      }
-    });
-
-    // Listen for OAuth profile state updates
-    const unlistenOAuthLoginPromise = listen<any>('oauth-login-success', (event) => {
-      if (event.payload) {
-        handleProfileSync(event.payload);
-      }
-    });
-
-    const unlistenProfileUpdatedPromise = listen<any>('profile-updated', (event) => {
-      if (event.payload) {
-        handleProfileSync(event.payload);
-      }
-    });
-
-    const unlistenOAuthLogoutPromise = listen<UserProfile>('oauth-logout-success', (event) => {
-      if (event.payload) {
-        setSettings((prev) => {
-          const updated = { ...prev, userProfile: event.payload };
-          savePreferencesToDb(updated);
-          return updated;
-        });
-      }
-    });
-
-    // Listen for cloud sync completed event from anywhere in the app
-    const unlistenCloudSyncPromise = listen<{ bookmarks_count: number; translations_count: number }>(
-      'cloud-sync-completed',
-      async () => {
-        const reloadedHistory = await loadHistoryFromDb([]);
-        setHistory(reloadedHistory);
-        const totalChars = reloadedHistory.reduce((acc, curr) => acc + (curr.charCount || curr.sourceText.length), 0);
-        setMetrics((prev) => ({
-          ...prev,
-          totalCharsTranslated: totalChars,
-          totalTranslationsCount: reloadedHistory.length,
-        }));
-      }
-    );
-
-    return () => {
-      unlistenSttPromise.then((unlisten) => unlisten());
-      unlistenTrnPromise.then((unlisten) => unlisten());
-      unlistenOAuthLoginPromise.then((unlisten) => unlisten());
-      unlistenProfileUpdatedPromise.then((unlisten) => unlisten());
-      unlistenOAuthLogoutPromise.then((unlisten) => unlisten());
-      unlistenCloudSyncPromise.then((unlisten) => unlisten());
-    };
-  }, []);
+  }, [handleProfileSync]);
 
   const handleUpdateSettings = async (newSettings: Partial<UserSettings>) => {
     const updated = { ...settings, ...newSettings };
@@ -281,6 +255,29 @@ export const App: React.FC = () => {
     setHasApiKey(false);
   };
 
+  const handleDeleteHistoryEntry = async (record: TranslationRecord) => {
+    setHistory((prev) => prev.filter((h) => h.id !== record.id));
+    await deleteHistoryFromDb(record.id);
+
+    setMetrics((prev) => ({
+      ...prev,
+      totalCharsTranslated: Math.max(0, prev.totalCharsTranslated - record.charCount),
+      totalTranslationsCount: Math.max(0, prev.totalTranslationsCount - 1),
+    }));
+
+    if (settings.userProfile.isAuthenticated) {
+      try {
+        await deleteTranslationFromDrive({
+          fileId: record.driveFileId,
+          id: record.id,
+          sourceText: record.sourceText,
+        });
+      } catch (err) {
+        console.warn('Failed to delete translation from Google Drive:', err);
+      }
+    }
+  };
+
   const handleClearHistory = async () => {
     setHistory([]);
     await clearHistoryInDb();
@@ -289,6 +286,14 @@ export const App: React.FC = () => {
       totalCharsTranslated: 0,
       totalTranslationsCount: 0,
     }));
+
+    if (settings.userProfile.isAuthenticated) {
+      try {
+        await clearAllTranslationsFromDrive();
+      } catch (err) {
+        console.warn('Failed to clear translations from Google Drive:', err);
+      }
+    }
   };
 
   const handleTriggerNativeOverlay = async (mode: 'stt' | 'translate' | 'bookmark') => {
@@ -341,6 +346,7 @@ export const App: React.FC = () => {
           <HistoryPage
             history={history}
             onClearHistory={handleClearHistory}
+            onDeleteEntry={handleDeleteHistoryEntry}
           />
         )}
         {activePage === 'settings' && (

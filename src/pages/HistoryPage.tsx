@@ -6,10 +6,12 @@ import { Copy, Check, Search, Languages, Trash2, ArrowRight } from 'lucide-react
 interface HistoryPageProps {
   history: TranslationRecord[];
   onClearHistory: () => void;
+  onDeleteEntry?: (record: TranslationRecord) => void;
 }
 
-export const HistoryPage: React.FC<HistoryPageProps> = ({ history, onClearHistory }) => {
+export const HistoryPage: React.FC<HistoryPageProps> = ({ history, onClearHistory, onDeleteEntry }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleCopy = (id: string, text: string) => {
@@ -18,6 +20,15 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ history, onClearHistor
     setTimeout(() => {
       setCopiedId(null);
     }, 2000);
+  };
+
+  const handleDelete = (item: TranslationRecord) => {
+    if (deletingId) return;
+    setDeletingId(item.id);
+    if (onDeleteEntry) {
+      onDeleteEntry(item);
+    }
+    setTimeout(() => setDeletingId(null), 300);
   };
 
   const filteredHistory = history.filter(
@@ -38,7 +49,8 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ history, onClearHistor
           history.length > 0 ? (
             <button
               onClick={onClearHistory}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-neutral-400 hover:text-red-400 hover:bg-neutral-900 border border-neutral-800 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-neutral-400 hover:text-rose-400 hover:bg-neutral-900 border border-neutral-800 transition-colors"
+              title="Clear all local history and cloud translations"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Clear Log
@@ -77,16 +89,30 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ history, onClearHistor
               key={item.id}
               className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-5 space-y-4 hover:border-neutral-700/60 transition-colors shadow-sm"
             >
-              {/* Card Header: Timestamp & Metadata */}
-              <div className="flex items-center justify-between border-b border-neutral-800/40 pb-3">
-                <div className="flex items-center gap-2">
+              {/* Card Header: Timestamp & Metadata & Actions */}
+              <div className="flex items-center justify-between border-b border-neutral-800/40 pb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-mono text-neutral-500">{item.timestamp}</span>
                   <span className="text-neutral-700">•</span>
                   <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-neutral-950 text-emerald-400 border border-neutral-800">
                     {item.sourceLang} <ArrowRight className="w-2.5 h-2.5 inline mx-0.5" /> {item.targetLang}
                   </span>
+                  <span className="text-neutral-700">•</span>
+                  <span className="text-[11px] font-mono text-neutral-500">{item.charCount} chars</span>
                 </div>
-                <span className="text-[11px] font-mono text-neutral-500">{item.charCount} characters</span>
+
+                <div className="flex items-center gap-2">
+                  {onDeleteEntry && (
+                    <button
+                      onClick={() => handleDelete(item)}
+                      disabled={deletingId === item.id}
+                      className="p-1 text-neutral-500 hover:text-rose-400 hover:bg-neutral-950 rounded transition-colors disabled:opacity-50"
+                      title="Clear entry from local history and Google Drive"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Source & Translated Output Grid */}

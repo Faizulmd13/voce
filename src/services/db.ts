@@ -78,7 +78,7 @@ export async function savePreferencesToDb(settings: UserSettings): Promise<void>
   }
 }
 
-export async function loadHistoryFromDb(fallback: TranslationRecord[]): Promise<TranslationRecord[]> {
+export async function loadHistoryFromDb(fallback: TranslationRecord[] = []): Promise<TranslationRecord[]> {
   try {
     const db = await getDb();
     if (!db) {
@@ -95,10 +95,11 @@ export async function loadHistoryFromDb(fallback: TranslationRecord[]): Promise<
       target_lang: string;
       timestamp: string;
       char_count: number;
+      drive_file_id: string | null;
     }[]>('SELECT * FROM history ORDER BY timestamp DESC');
 
     if (rows && rows.length > 0) {
-      return rows.map((r) => ({
+      const mapped = rows.map((r) => ({
         id: r.id,
         timestamp: r.timestamp,
         sourceText: r.source_text,
@@ -106,34 +107,92 @@ export async function loadHistoryFromDb(fallback: TranslationRecord[]): Promise<
         translatedText: r.translated_text,
         targetLang: r.target_lang || 'English',
         charCount: r.char_count || r.source_text.length,
+        driveFileId: r.drive_file_id || undefined,
       }));
+      localStorage.setItem('voce_history', JSON.stringify(mapped));
+      return mapped;
+    }
+
+    const local = localStorage.getItem('voce_history');
+    if (local) {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
     }
   } catch (e) {
     console.error('Failed to load history from SQLite:', e);
+    const local = localStorage.getItem('voce_history');
+    if (local) return JSON.parse(local);
   }
   return fallback;
 }
 
 export async function insertHistoryToDb(record: TranslationRecord): Promise<void> {
   try {
+    // 1. Update localStorage cache for instant reactivity
+    const local = await loadHistoryFromDb([]);
+    const isDup = local.some(
+      (h) => h.id === record.id || (h.sourceText.trim() === record.sourceText.trim() && h.translatedText.trim() === record.translatedText.trim())
+    );
+    const updated = isDup
+      ? local.map((h) =>
+          h.id === record.id || (h.sourceText.trim() === record.sourceText.trim() && h.translatedText.trim() === record.translatedText.trim())
+            ? { ...h, ...record, driveFileId: record.driveFileId || h.driveFileId }
+            : h
+        )
+      : [record, ...local];
+    localStorage.setItem('voce_history', JSON.stringify(updated));
+
+    // 2. Persist to SQLite
     const db = await getDb();
     if (db) {
+      // Check if duplicate entry exists with identical ID or identical source and translated text
+      const existing: any[] = await db.select(
+        'SELECT id, drive_file_id FROM history WHERE id = $1 OR (source_text = $2 AND translated_text = $3)',
+        [record.id, record.sourceText.trim(), record.translatedText.trim()]
+      );
+      if (existing && existing.length > 0) {
+        const existingRow = existing[0];
+        const driveIdToKeep = record.driveFileId || existingRow.drive_file_id;
+        await db.execute(
+          'UPDATE history SET timestamp = $1, drive_file_id = $2 WHERE id = $3',
+          [record.timestamp, driveIdToKeep, existingRow.id]
+        );
+        return;
+      }
       await db.execute(
-        'INSERT INTO history (id, type, source_text, translated_text, source_lang, target_lang, timestamp, char_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        'INSERT INTO history (id, type, source_text, translated_text, source_lang, target_lang, timestamp, char_count, drive_file_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT(id) DO UPDATE SET source_text = $3, translated_text = $4, timestamp = $7, drive_file_id = $9',
         [
           record.id,
           'translation',
           record.sourceText,
           record.translatedText,
-          record.sourceLang,
-          record.targetLang,
+          record.sourceLang || 'Auto-detected',
+          record.targetLang || 'English',
           record.timestamp,
-          record.charCount,
+          record.charCount || record.sourceText.length,
+          record.driveFileId || null,
         ]
       );
     }
   } catch (e) {
     console.error('Failed to insert history to SQLite:', e);
+  }
+}
+
+export async function deleteHistoryFromDb(id: string): Promise<void> {
+  try {
+    const local = await loadHistoryFromDb([]);
+    const filtered = local.filter((h) => h.id !== id && h.driveFileId !== id);
+    localStorage.setItem('voce_history', JSON.stringify(filtered));
+
+    const db = await getDb();
+    if (db) {
+      await db.execute('DELETE FROM history WHERE id = $1 OR drive_file_id = $1', [id]);
+    }
+  } catch (e) {
+    console.error('Failed to delete history item in SQLite:', e);
   }
 }
 
@@ -258,22 +317,64 @@ export async function syncHistoryToDb(records: TranslationRecord[]): Promise<voi
     const db = await getDb();
     if (db) {
       for (const record of records) {
-        await db.execute(
-          'INSERT INTO history (id, type, source_text, translated_text, source_lang, target_lang, timestamp, char_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT(id) DO UPDATE SET source_text = $3, translated_text = $4',
-          [
-            record.id,
-            'translation',
-            record.sourceText,
-            record.translatedText,
-            record.sourceLang || 'Auto-detected',
-            record.targetLang || 'English',
-            record.timestamp,
-            record.charCount || record.sourceText.length,
-          ]
+        const existing: any[] = await db.select(
+          'SELECT id, drive_file_id FROM history WHERE id = $1 OR (source_text = $2 AND translated_text = $3)',
+          [record.id, record.sourceText.trim(), record.translatedText.trim()]
         );
+        if (existing && existing.length > 0) {
+          const existingRow = existing[0];
+          const driveIdToKeep = record.driveFileId || existingRow.drive_file_id;
+          await db.execute(
+            'UPDATE history SET timestamp = $1, drive_file_id = $2 WHERE id = $3',
+            [record.timestamp, driveIdToKeep, existingRow.id]
+          );
+        } else {
+          await db.execute(
+            'INSERT INTO history (id, type, source_text, translated_text, source_lang, target_lang, timestamp, char_count, drive_file_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT(id) DO UPDATE SET source_text = $3, translated_text = $4, timestamp = $7, drive_file_id = $9',
+            [
+              record.id,
+              'translation',
+              record.sourceText,
+              record.translatedText,
+              record.sourceLang || 'Auto-detected',
+              record.targetLang || 'English',
+              record.timestamp,
+              record.charCount || record.sourceText.length,
+              record.driveFileId || null,
+            ]
+          );
+        }
       }
     }
   } catch (e) {
     console.error('Failed to sync history to SQLite:', e);
   }
 }
+
+export async function clearBookmarksInDb(): Promise<void> {
+  try {
+    localStorage.removeItem('voce_bookmarks');
+    const db = await getDb();
+    if (db) {
+      await db.execute('DELETE FROM bookmarks');
+    }
+  } catch (e) {
+    console.error('Failed to clear bookmarks in SQLite:', e);
+  }
+}
+
+export async function wipeAllLocalDataFromDb(): Promise<void> {
+  try {
+    localStorage.removeItem('voce_bookmarks');
+    localStorage.removeItem('voce_history');
+    const db = await getDb();
+    if (db) {
+      await db.execute('DELETE FROM bookmarks');
+      await db.execute('DELETE FROM history');
+    }
+    console.log('[Voce Privacy] All local SQLite bookmarks and history successfully wiped.');
+  } catch (e) {
+    console.error('Failed to wipe all local data from SQLite:', e);
+  }
+}
+
