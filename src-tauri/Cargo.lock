@@ -5153,21 +5153,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-plugin-oauth"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de12964768a2beb9d673580694f45211bb354336e7b127476bde807093c047e3"
-dependencies = [
- "httparse",
- "log",
- "serde",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.20",
- "url",
-]
-
-[[package]]
 name = "tauri-plugin-sql"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5911,7 +5896,6 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-clipboard-manager",
  "tauri-plugin-global-shortcut",
- "tauri-plugin-oauth",
  "tauri-plugin-sql",
  "tauri-plugin-store",
  "tokio",
