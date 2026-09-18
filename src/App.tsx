@@ -187,9 +187,12 @@ export const App: React.FC = () => {
     onSyncCompleted: handleSyncCompleted,
   });
 
+  // Track app installation / launch metric once on component mount
   useEffect(() => {
     reportAppInstall();
+  }, []);
 
+  useEffect(() => {
     async function initDbAndShortcuts() {
       // Check for saved Groq API Key
       try {

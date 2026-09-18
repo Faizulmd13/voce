@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { UserProfile, TranslationRecord, BookmarkItem } from '../types';
-import { reportSttDictation, reportTranslation } from '../utils/firebase';
 import { insertHistoryToDb, wipeAllLocalDataFromDb, syncHistoryToDb, syncBookmarksToDb } from '../services/db';
 import { normalizeUserProfile } from '../services/cloud';
 
@@ -26,7 +25,6 @@ export function useTauriEvents({
       if (event.payload?.text) {
         const words = event.payload.text.split(/\s+/).filter(Boolean).length;
         onTranscription(words);
-        reportSttDictation(words);
       }
     });
 
@@ -52,7 +50,6 @@ export function useTauriEvents({
         };
         await insertHistoryToDb(record);
         onTranslation(record);
-        reportTranslation(record.charCount);
       }
     });
 

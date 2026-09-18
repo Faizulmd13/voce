@@ -7,6 +7,7 @@ import {
   injectTextToCursor,
   hideOverlay 
 } from '../../services/tauri';
+import { reportSttDictation } from '../../utils/firebase';
 import { listen } from '@tauri-apps/api/event';
 
 interface DictationOverlayProps {
@@ -95,6 +96,10 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
       const result = await executeCloudTranscription(wavPath);
       
       if (result && result.trim()) {
+        const wordCount = result.trim().split(/\s+/).filter(Boolean).length;
+        if (wordCount > 0) {
+          reportSttDictation(wordCount);
+        }
         setTranscript(result);
         setOverlayState('success');
 

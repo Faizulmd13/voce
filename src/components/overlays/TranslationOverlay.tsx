@@ -6,6 +6,7 @@ import {
   injectTextToCursor, 
   hideOverlay 
 } from '../../services/tauri';
+import { reportTranslation } from '../../utils/firebase';
 import { listen } from '@tauri-apps/api/event';
 
 interface TranslationOverlayProps {
@@ -68,6 +69,10 @@ export const TranslationOverlay: React.FC<TranslationOverlayProps> = ({
     try {
       const translated = await executeCloudTranslation(trimmed, target, source);
       setTranslatedText(translated);
+      if (translated) {
+        const charCount = translated.length;
+        reportTranslation(charCount);
+      }
     } catch (e) {
       console.error('Translation error:', e);
       setTranslatedText('');
