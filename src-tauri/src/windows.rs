@@ -89,6 +89,7 @@ pub fn position_window_at_cursor(app: &AppHandle, label: &str, offset_y: i32) {
 
 #[tauri::command]
 pub fn show_overlay(app: AppHandle, label: String, offset_y: Option<i32>) -> Result<(), String> {
+    crate::clipboard::record_foreground_window();
     position_window_at_cursor(&app, &label, offset_y.unwrap_or(20));
     Ok(())
 }

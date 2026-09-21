@@ -6,6 +6,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 // Handle global STT activation
 pub fn trigger_stt_flow(app: &AppHandle) {
+    crate::clipboard::record_foreground_window();
     position_window_at_cursor(app, "stt-overlay", 20);
 
     let state: State<'_, AppAudioState> = app.state();
@@ -18,6 +19,7 @@ pub fn trigger_stt_flow(app: &AppHandle) {
 
 // Handle global Translation activation: captures highlighted text non-destructively
 pub fn trigger_translate_flow(app: &AppHandle) {
+    crate::clipboard::record_foreground_window();
     let source_text = capture_synthetic_clipboard_selection();
 
     position_window_at_cursor(app, "translate-overlay", 20);
@@ -49,6 +51,7 @@ pub fn trigger_translate_flow(app: &AppHandle) {
 
 // Handle global Bookmark activation: captures highlighted text non-destructively
 pub fn trigger_bookmark_flow(app: &AppHandle) {
+    crate::clipboard::record_foreground_window();
     let captured_text = capture_synthetic_clipboard_selection();
     println!("[Bookmark Hotkey] Triggering bookmark flow with captured text length: {}", captured_text.len());
 

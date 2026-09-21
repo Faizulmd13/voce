@@ -139,6 +139,23 @@ pub fn capture_synthetic_clipboard_selection() -> String {
     }
 }
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+pub static PREVIOUS_FOREGROUND_WINDOW: AtomicUsize = AtomicUsize::new(0);
+
+pub fn record_foreground_window() {
+    #[cfg(target_os = "windows")]
+    {
+        extern "system" {
+            fn GetForegroundWindow() -> isize;
+        }
+        let hwnd = unsafe { GetForegroundWindow() };
+        if hwnd != 0 {
+            PREVIOUS_FOREGROUND_WINDOW.store(hwnd as usize, Ordering::SeqCst);
+        }
+    }
+}
+
 #[tauri::command]
 pub fn inject_text_to_cursor(app: AppHandle, text: String) -> Result<(), String> {
     println!("[OS Hook] Injecting text to active cursor: {}", text);
@@ -149,9 +166,8 @@ pub fn inject_text_to_cursor(app: AppHandle, text: String) -> Result<(), String>
         .set_text(&text)
         .map_err(|e| format!("Failed to set clipboard text: {}", e))?;
 
-    if let Some(stt_win) = app.get_webview_window("stt-overlay") {
-        let _ = stt_win.hide();
-    }
+    // Close translation and bookmark overlays if open, but DO NOT hide stt-overlay
+    // so the dictation HUD pill can display the success notification cleanly.
     if let Some(trn_win) = app.get_webview_window("translate-overlay") {
         let _ = trn_win.hide();
     }
@@ -159,33 +175,56 @@ pub fn inject_text_to_cursor(app: AppHandle, text: String) -> Result<(), String>
         let _ = bm_win.hide();
     }
 
-    // Yield OS window focus back to the active underlying app
-    std::thread::sleep(Duration::from_millis(60));
-
-    let mut enigo =
-        Enigo::new(&EnigoSettings::default()).map_err(|e| format!("Enigo error: {:?}", e))?;
-
     #[cfg(target_os = "windows")]
     {
-        let _ = enigo.key(Key::Control, Direction::Press);
-        std::thread::sleep(Duration::from_millis(40));
-        let _ = enigo.key(Key::Unicode('v'), Direction::Click);
-        std::thread::sleep(Duration::from_millis(20));
-        let _ = enigo.key(Key::Control, Direction::Release);
+        extern "system" {
+            fn SetForegroundWindow(hwnd: isize) -> i32;
+            fn keybd_event(bVk: u8, bScan: u8, dwFlags: u32, dwExtraInfo: usize);
+        }
+        const KEYEVENTF_KEYUP: u32 = 0x0002;
+
+        let target_hwnd = PREVIOUS_FOREGROUND_WINDOW.load(Ordering::SeqCst);
+        if target_hwnd != 0 {
+            unsafe {
+                SetForegroundWindow(target_hwnd as isize);
+            }
+            std::thread::sleep(Duration::from_millis(60));
+        } else {
+            std::thread::sleep(Duration::from_millis(60));
+        }
+
+        // Send hardware Ctrl+V sequence directly to the restored target window
+        unsafe {
+            keybd_event(0x11, 0, 0, 0); // VK_CONTROL DOWN
+            std::thread::sleep(Duration::from_millis(25));
+            keybd_event(0x56, 0, 0, 0); // VK_V DOWN
+            std::thread::sleep(Duration::from_millis(30));
+            keybd_event(0x56, 0, KEYEVENTF_KEYUP, 0); // VK_V UP
+            std::thread::sleep(Duration::from_millis(25));
+            keybd_event(0x11, 0, KEYEVENTF_KEYUP, 0); // VK_CONTROL UP
+        }
     }
 
     #[cfg(target_os = "macos")]
     {
-        let _ = enigo.key(Key::Meta, Direction::Press);
-        let _ = enigo.key(Key::Unicode('v'), Direction::Click);
-        let _ = enigo.key(Key::Meta, Direction::Release);
+        std::thread::sleep(Duration::from_millis(60));
+        if let Ok(mut enigo) = Enigo::new(&EnigoSettings::default()) {
+            let _ = enigo.key(Key::Meta, Direction::Press);
+            let _ = enigo.key(Key::Unicode('v'), Direction::Click);
+            let _ = enigo.key(Key::Meta, Direction::Release);
+        }
     }
+
     #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     {
-        let _ = enigo.key(Key::Control, Direction::Press);
-        let _ = enigo.key(Key::Unicode('v'), Direction::Click);
-        let _ = enigo.key(Key::Control, Direction::Release);
+        std::thread::sleep(Duration::from_millis(60));
+        if let Ok(mut enigo) = Enigo::new(&EnigoSettings::default()) {
+            let _ = enigo.key(Key::Control, Direction::Press);
+            let _ = enigo.key(Key::Unicode('v'), Direction::Click);
+            let _ = enigo.key(Key::Control, Direction::Release);
+        }
     }
 
     Ok(())
 }
+
