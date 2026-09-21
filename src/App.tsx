@@ -14,7 +14,8 @@ import {
   savePreferencesToDb, 
   loadHistoryFromDb, 
   clearHistoryInDb,
-  deleteHistoryFromDb
+  deleteHistoryFromDb,
+  loadDictationMetricsFromDb
 } from './services/db';
 import { 
   updateBackendHotkeys,
@@ -24,7 +25,8 @@ import {
   getGoogleUserProfile,
   normalizeUserProfile,
   deleteTranslationFromDrive,
-  clearAllTranslationsFromDrive
+  clearAllTranslationsFromDrive,
+  getAccumulatedWordCount
 } from './services/tauri';
 import { reportAppInstall } from './utils/firebase';
 import { useSync } from './hooks/useSync';
@@ -209,10 +211,27 @@ export const App: React.FC = () => {
       setHistory(dbHistory);
 
       const totalChars = dbHistory.reduce((acc, curr) => acc + (curr.charCount || curr.sourceText.length), 0);
+      
+      // Load persisted word count & dictations metrics from SQLite
+      let persistedWords = 0;
+      let persistedDictations = 0;
+      try {
+        const dictMetrics = await getAccumulatedWordCount();
+        persistedWords = Number(dictMetrics.total_words || 0);
+        persistedDictations = Number(dictMetrics.total_dictations || 0);
+      } catch (err) {
+        console.warn('Failed to fetch dictation metrics via Tauri command, using SQLite DB fallback:', err);
+        const localDictMetrics = await loadDictationMetricsFromDb();
+        persistedWords = localDictMetrics.totalWords;
+        persistedDictations = localDictMetrics.totalDictations;
+      }
+
       setMetrics((prev) => ({
         ...prev,
         totalCharsTranslated: totalChars,
         totalTranslationsCount: dbHistory.length,
+        totalWordsDictated: persistedWords,
+        totalDictationsCount: persistedDictations,
       }));
 
       // Check stored Google OAuth profile & trigger bidirectional cloud sync if logged in

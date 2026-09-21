@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { UserProfile, TranslationRecord, BookmarkItem } from '../types';
-import { insertHistoryToDb, wipeAllLocalDataFromDb, syncHistoryToDb, syncBookmarksToDb } from '../services/db';
+import { UserProfile, TranslationRecord, BookmarkItem, DictationRecord } from '../types';
+import { insertHistoryToDb, insertDictationToDb, wipeAllLocalDataFromDb, syncHistoryToDb, syncBookmarksToDb } from '../services/db';
 import { normalizeUserProfile } from '../services/cloud';
 
 interface UseTauriEventsProps {
@@ -21,10 +21,19 @@ export function useTauriEvents({
 }: UseTauriEventsProps) {
   useEffect(() => {
     // 1. Transcription completed event
-    const unlistenSttPromise = listen<{ text: string }>('transcription-completed', (event) => {
-      if (event.payload?.text) {
-        const words = event.payload.text.split(/\s+/).filter(Boolean).length;
-        onTranscription(words);
+    const unlistenSttPromise = listen<{ text?: string; words?: number; word_count?: number }>('transcription-completed', async (event) => {
+      if (event.payload) {
+        const words = event.payload.words ?? event.payload.word_count ?? (event.payload.text ? event.payload.text.split(/\s+/).filter(Boolean).length : 0);
+        if (words > 0) {
+          const record: DictationRecord = {
+            id: `stt_${Date.now()}`,
+            wordCount: words,
+            timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+            durationMs: 0,
+          };
+          await insertDictationToDb(record);
+          onTranscription(words);
+        }
       }
     });
 

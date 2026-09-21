@@ -21,10 +21,9 @@ export interface TranslationPayload {
 
 export interface DictationRecord {
   id: string;
-  timestamp: string;
-  text: string;
   wordCount: number;
-  durationMs: number;
+  timestamp: string;
+  durationMs?: number;
 }
 
 export interface BookmarkItem {

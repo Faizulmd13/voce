@@ -1,6 +1,6 @@
 [package]
 name = "voce"
-version = "1.0.1"
+version = "1.0.2"
 description = "Voce - AI Desktop Assistant powered by Groq Cloud"
 authors = ["Faizul <faizul@voce.ai>"]
 edition = "2021"
@@ -35,6 +35,7 @@ rubato = "5.0.0"
 reqwest = { version = "0.13.5", features = ["multipart", "json"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 dotenvy = "0.15"
+sqlx = { version = "0.8.6", default-features = false, features = ["sqlite"] }
 
 [profile.release]
 panic = "abort"

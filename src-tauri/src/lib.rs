@@ -68,6 +68,19 @@ pub fn run() {
             sql: "ALTER TABLE history ADD COLUMN drive_file_id TEXT;",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "create_dictations_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS dictations (
+                    id TEXT PRIMARY KEY,
+                    word_count INTEGER NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    duration_ms INTEGER DEFAULT 0
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -201,7 +214,9 @@ pub fn run() {
             sync::clear_all_translations_from_drive,
             sync::sync_from_cloud,
             sync::retroactive_sync_local_data,
-            hotkeys::update_global_hotkeys
+            hotkeys::update_global_hotkeys,
+            ai::get_accumulated_word_count,
+            ai::record_dictation
         ])
         .run(tauri::generate_context!())
         .expect("error while running voce application");

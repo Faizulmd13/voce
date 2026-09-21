@@ -15,6 +15,26 @@ pub struct DictationPayload {
     pub model: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DictationMetrics {
+    #[serde(alias = "total_words")]
+    pub total_words: i64,
+    #[serde(alias = "total_dictations")]
+    pub total_dictations: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DictationRecord {
+    pub id: String,
+    #[serde(alias = "word_count")]
+    pub word_count: i64,
+    pub timestamp: String,
+    #[serde(alias = "duration_ms")]
+    pub duration_ms: Option<i64>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TranslationEventData {
     pub source_text: String,

@@ -142,3 +142,19 @@ export async function setAutostartEnabled(enabled: boolean): Promise<void> {
     console.warn('Failed to toggle autostart:', e);
   }
 }
+
+export async function getAccumulatedWordCount(): Promise<{ total_words: number; total_dictations: number }> {
+  return await invoke<{ total_words: number; total_dictations: number }>('get_accumulated_word_count');
+}
+
+export async function recordDictation(
+  wordCount: number,
+  durationMs?: number,
+  id?: string
+): Promise<{ total_words: number; total_dictations: number }> {
+  return await invoke<{ total_words: number; total_dictations: number }>('record_dictation', {
+    wordCount,
+    durationMs,
+    id,
+  });
+}

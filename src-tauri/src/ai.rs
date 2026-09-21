@@ -1,6 +1,90 @@
-use crate::models::{DictationPayload, TranslationPayload, UserProfile};
-use tauri::{AppHandle, Emitter};
+use crate::models::{DictationMetrics, DictationPayload, TranslationPayload, UserProfile};
+use sqlx::{sqlite::SqliteConnectOptions, Connection, Row, SqliteConnection};
+use std::str::FromStr;
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
+
+async fn get_voce_sqlite_conn(app: &AppHandle) -> Result<SqliteConnection, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app_data_dir: {}", e))?;
+    let _ = std::fs::create_dir_all(&app_data_dir);
+    let db_path = app_data_dir.join("voce.db");
+    let conn_str = format!("sqlite://{}", db_path.to_string_lossy().replace('\\', "/"));
+    let opts = SqliteConnectOptions::from_str(&conn_str)
+        .map_err(|e| format!("Invalid connection options: {}", e))?
+        .create_if_missing(true);
+
+    let mut conn = SqliteConnection::connect_with(&opts)
+        .await
+        .map_err(|e| format!("Failed to connect to SQLite: {}", e))?;
+
+    // Ensure dictations table exists
+    let _ = sqlx::query(
+        "CREATE TABLE IF NOT EXISTS dictations (
+            id TEXT PRIMARY KEY,
+            word_count INTEGER NOT NULL,
+            timestamp TEXT NOT NULL,
+            duration_ms INTEGER DEFAULT 0
+        );"
+    )
+    .execute(&mut conn)
+    .await;
+
+    Ok(conn)
+}
+
+#[tauri::command]
+pub async fn get_accumulated_word_count(app: AppHandle) -> Result<DictationMetrics, String> {
+    let mut conn = get_voce_sqlite_conn(&app).await?;
+    let row = sqlx::query("SELECT COALESCE(SUM(word_count), 0) as total_words, COUNT(*) as total_dictations FROM dictations")
+        .fetch_one(&mut conn)
+        .await;
+
+    match row {
+        Ok(r) => {
+            let total_words: i64 = r.try_get("total_words").unwrap_or(0);
+            let total_dictations: i64 = r.try_get("total_dictations").unwrap_or(0);
+            Ok(DictationMetrics {
+                total_words,
+                total_dictations,
+            })
+        }
+        Err(_) => Ok(DictationMetrics {
+            total_words: 0,
+            total_dictations: 0,
+        }),
+    }
+}
+
+#[tauri::command]
+pub async fn record_dictation(
+    app: AppHandle,
+    id: Option<String>,
+    word_count: i64,
+    duration_ms: Option<i64>,
+) -> Result<DictationMetrics, String> {
+    let mut conn = get_voce_sqlite_conn(&app).await?;
+    let rec_id = id.unwrap_or_else(|| format!("stt_{}", chrono::Local::now().timestamp_millis()));
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let duration = duration_ms.unwrap_or(0);
+
+    let _ = sqlx::query(
+        "INSERT INTO dictations (id, word_count, timestamp, duration_ms)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(id) DO UPDATE SET word_count = ?2, timestamp = ?3, duration_ms = ?4"
+    )
+    .bind(&rec_id)
+    .bind(word_count)
+    .bind(&timestamp)
+    .bind(duration)
+    .execute(&mut conn)
+    .await
+    .map_err(|e| format!("Failed to insert dictation: {}", e))?;
+
+    get_accumulated_word_count(app).await
+}
 
 /// Helper to fetch the user's Groq API key securely from the local store or env override
 pub fn get_groq_api_key(app: &AppHandle) -> Result<String, String> {
@@ -127,9 +211,38 @@ pub async fn execute_cloud_transcription(
         .map_err(|e| format!("Failed to parse Groq STT response: {}", e))?;
 
     let transcript = json["text"].as_str().unwrap_or("").trim().to_string();
+    let word_count = transcript.split_whitespace().count() as i64;
 
-    println!("[Groq STT] Transcription result: \"{}\"", transcript);
-    let _ = app.emit("transcription-completed", serde_json::json!({ "text": &transcript }));
+    println!(
+        "[Groq STT] Transcription result: \"{}\" (words: {})",
+        transcript, word_count
+    );
+
+    if word_count > 0 {
+        if let Ok(mut conn) = get_voce_sqlite_conn(&app).await {
+            let stt_id = format!("stt_{}", chrono::Local::now().timestamp_millis());
+            let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            let _ = sqlx::query(
+                "INSERT INTO dictations (id, word_count, timestamp, duration_ms) VALUES (?1, ?2, ?3, ?4)"
+            )
+            .bind(&stt_id)
+            .bind(word_count)
+            .bind(&timestamp)
+            .bind(0i64)
+            .execute(&mut conn)
+            .await;
+            println!("[Groq STT] Persisted dictation {} words into SQLite.", word_count);
+        }
+    }
+
+    let _ = app.emit(
+        "transcription-completed",
+        serde_json::json!({
+            "text": &transcript,
+            "words": word_count,
+            "word_count": word_count,
+        }),
+    );
     Ok(transcript)
 }
 

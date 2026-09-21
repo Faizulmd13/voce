@@ -5801,7 +5801,7 @@ dependencies = [
 
 [[package]]
 name = "voce"
-version = "0.1.0"
+version = "1.0.2"
 dependencies = [
  "arboard",
  "chrono",
@@ -5813,6 +5813,7 @@ dependencies = [
  "rubato",
  "serde",
  "serde_json",
+ "sqlx",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",

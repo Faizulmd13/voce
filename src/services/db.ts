@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import { TranslationRecord, UserSettings, BookmarkItem } from '../types';
+import { TranslationRecord, UserSettings, BookmarkItem, DictationRecord } from '../types';
 
 let dbInstance: Database | null = null;
 
@@ -363,16 +363,88 @@ export async function clearBookmarksInDb(): Promise<void> {
   }
 }
 
+// ----------------------------------------------------------------------------
+// DICTATIONS LOCAL OFFLINE STATS & CACHE
+// ----------------------------------------------------------------------------
+
+export async function loadDictationMetricsFromDb(): Promise<{ totalWords: number; totalDictations: number }> {
+  try {
+    const db = await getDb();
+    if (db) {
+      const rows = await db.select<{ total_words: number; total_dictations: number }[]>(
+        'SELECT COALESCE(SUM(word_count), 0) AS total_words, COUNT(*) AS total_dictations FROM dictations'
+      );
+      if (rows && rows.length > 0) {
+        const res = {
+          totalWords: Number(rows[0].total_words || 0),
+          totalDictations: Number(rows[0].total_dictations || 0),
+        };
+        localStorage.setItem('voce_dictation_metrics', JSON.stringify(res));
+        return res;
+      }
+    }
+    const local = localStorage.getItem('voce_dictation_metrics');
+    if (local) return JSON.parse(local);
+  } catch (e) {
+    console.error('Failed to load dictation metrics from SQLite:', e);
+    const local = localStorage.getItem('voce_dictation_metrics');
+    if (local) return JSON.parse(local);
+  }
+  return { totalWords: 0, totalDictations: 0 };
+}
+
+export async function insertDictationToDb(record: DictationRecord): Promise<void> {
+  try {
+    const db = await getDb();
+    if (db) {
+      await db.execute(
+        'INSERT INTO dictations (id, word_count, timestamp, duration_ms) VALUES ($1, $2, $3, $4) ON CONFLICT(id) DO UPDATE SET word_count = $2, timestamp = $3, duration_ms = $4',
+        [
+          record.id,
+          record.wordCount,
+          record.timestamp,
+          record.durationMs || 0,
+        ]
+      );
+    }
+    // Update local cache
+    const current = await loadDictationMetricsFromDb();
+    localStorage.setItem(
+      'voce_dictation_metrics',
+      JSON.stringify({
+        totalWords: current.totalWords + record.wordCount,
+        totalDictations: current.totalDictations + 1,
+      })
+    );
+  } catch (e) {
+    console.error('Failed to insert dictation into SQLite:', e);
+  }
+}
+
+export async function clearDictationsInDb(): Promise<void> {
+  try {
+    localStorage.removeItem('voce_dictation_metrics');
+    const db = await getDb();
+    if (db) {
+      await db.execute('DELETE FROM dictations');
+    }
+  } catch (e) {
+    console.error('Failed to clear dictations in SQLite:', e);
+  }
+}
+
 export async function wipeAllLocalDataFromDb(): Promise<void> {
   try {
     localStorage.removeItem('voce_bookmarks');
     localStorage.removeItem('voce_history');
+    localStorage.removeItem('voce_dictation_metrics');
     const db = await getDb();
     if (db) {
       await db.execute('DELETE FROM bookmarks');
       await db.execute('DELETE FROM history');
+      await db.execute('DELETE FROM dictations');
     }
-    console.log('[Voce Privacy] All local SQLite bookmarks and history successfully wiped.');
+    console.log('[Voce Privacy] All local SQLite bookmarks, history, and dictations successfully wiped.');
   } catch (e) {
     console.error('Failed to wipe all local data from SQLite:', e);
   }
