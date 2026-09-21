@@ -26,7 +26,6 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
   isStandalone = false,
 }) => {
   const [state, setState] = useState<'listening' | 'transcribing' | 'success'>('listening');
-  const [transcript, setTranscript] = useState('');
   const [recordingSeconds, setRecordingSeconds] = useState(0);
 
   const stateRef = useRef<'listening' | 'transcribing' | 'success'>('listening');
@@ -55,7 +54,6 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
     clearAllTimers();
     isProcessingRef.current = false;
     setOverlayState('listening');
-    setTranscript('');
     setRecordingSeconds(0);
   }, [clearAllTimers, setOverlayState]);
 
@@ -135,7 +133,6 @@ export const DictationOverlay: React.FC<DictationOverlayProps> = ({
         if (wordCount > 0) {
           reportSttDictation(wordCount);
         }
-        setTranscript(trimmed);
 
         // 1. Switch to success state immediately so UI updates without delay
         setOverlayState('success');
