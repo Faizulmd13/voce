@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '../components/Header';
 import { ProfileCard } from '../components/ProfileCard';
+import { UpdateNotificationCard } from '../components/UpdateNotificationCard';
 import { UserSettings } from '../types';
 import { 
   Keyboard, 
@@ -14,7 +15,9 @@ import {
   EyeOff, 
   ExternalLink,
   Trash2,
-  X
+  X,
+  Info,
+  RefreshCw
 } from 'lucide-react';
 import { 
   getStoredApiKey, 
@@ -24,6 +27,7 @@ import {
   isAutostartEnabled, 
   setAutostartEnabled 
 } from '../services/tauri';
+import { getCurrentAppVersion, checkForAppUpdate } from '../services/updater';
 
 interface SettingsPageProps {
   settings: UserSettings;
@@ -45,8 +49,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [isResettingKey, setIsResettingKey] = useState(false);
   const [keySaveStatus, setKeySaveStatus] = useState<string | null>(null);
   const [autostartEnabled, setAutostartEnabledState] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>('0.1.0');
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
+  const [updateStatusMessage, setUpdateStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    getCurrentAppVersion().then((v) => {
+      if (v) setAppVersion(v);
+    });
     getStoredApiKey().then((k) => {
       if (k) setApiKeyInput(k);
     });
@@ -174,6 +184,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         userProfile={settings.userProfile} 
         onProfileUpdate={(updated) => onUpdateSettings({ userProfile: updated })} 
       />
+
+      {/* Automatic In-App Update Notification Card (appears when new release exists) */}
+      <UpdateNotificationCard autoCheck={true} />
 
       {/* App Preferences: Clean, inline layout rows */}
       <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl divide-y divide-neutral-800/50 shadow-sm">
@@ -553,6 +566,81 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             <p className="text-[11px] text-neutral-500 font-mono mt-1">Zero-shot high-accuracy text translation</p>
           </div>
         </div>
+      </div>
+
+      {/* About & Software Updates Section */}
+      <div className="bg-neutral-900 border border-neutral-800/60 rounded-xl p-4 sm:p-5 space-y-4 shadow-sm transition-all">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-emerald-500 shrink-0" />
+            <h2 className="text-sm font-semibold text-neutral-200 uppercase font-mono tracking-wider">
+              About & Software Updates
+            </h2>
+          </div>
+          <span className="text-xs font-mono text-neutral-400">
+            Version v{appVersion}
+          </span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-1">
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <span className="text-xs font-medium text-neutral-200 block font-sans">
+              Voce Desktop for Windows, macOS & Linux
+            </span>
+            <span className="text-[11px] text-neutral-500 font-mono block break-words">
+              Stay up-to-date with the latest features, improvements, and performance enhancements.
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end shrink-0 pt-2 sm:pt-0 border-t border-neutral-800/60 sm:border-0">
+            <button
+              type="button"
+              onClick={async () => {
+                setIsCheckingUpdate(true);
+                setUpdateStatusMessage(null);
+                try {
+                  const info = await checkForAppUpdate();
+                  if (info.hasUpdate) {
+                    setUpdateStatusMessage(`Update ${info.latestVersion} available! Click Download Update in the banner above.`);
+                  } else {
+                    setUpdateStatusMessage(`Voce is up to date (v${info.currentVersion}).`);
+                    setTimeout(() => setUpdateStatusMessage(null), 4000);
+                  }
+                } catch {
+                  setUpdateStatusMessage('Unable to connect to update server.');
+                } finally {
+                  setIsCheckingUpdate(false);
+                }
+              }}
+              disabled={isCheckingUpdate}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-mono transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdate ? 'animate-spin text-emerald-400' : 'text-neutral-400'}`} />
+              <span>{isCheckingUpdate ? 'Checking...' : 'Check for Updates'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await openExternalUrl('https://github.com/Faizulmd13/voce/releases');
+                } catch {
+                  window.open('https://github.com/Faizulmd13/voce/releases', '_blank');
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200 text-xs font-mono transition-colors"
+            >
+              <span>Release Notes</span>
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        {updateStatusMessage && (
+          <div className={`text-xs font-mono pt-1 break-words ${updateStatusMessage.includes('available') ? 'text-emerald-400 font-medium' : 'text-neutral-400'}`}>
+            {updateStatusMessage}
+          </div>
+        )}
       </div>
     </div>
   );

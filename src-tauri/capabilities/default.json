@@ -28,6 +28,8 @@
     "core:window:allow-set-always-on-top",
     "core:window:allow-current-monitor",
     "core:window:allow-outer-size",
-    "core:window:allow-inner-size"
+    "core:window:allow-inner-size",
+    "core:app:default",
+    "core:app:allow-version"
   ]
 }

@@ -1,6 +1,6 @@
 [package]
 name = "voce"
-version = "0.1.0"
+version = "1.0.1"
 description = "Voce - AI Desktop Assistant powered by Groq Cloud"
 authors = ["Faizul <faizul@voce.ai>"]
 edition = "2021"
