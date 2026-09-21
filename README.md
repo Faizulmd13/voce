@@ -4,12 +4,17 @@
 
 **Secure, offline-first dictation and translation with native Google Drive cloud sync.**
 
-[![Windows](https://img.shields.io/badge/Windows-v1.0.0-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/Faizulmd13/voce/releases/latest)
-[![Web](https://img.shields.io/badge/Live-Web_App-1DB954?style=flat-square)](https://voce-launch-page.vercel.app/)
+[![Build Status](https://github.com/Faizulmd13/voce/actions/workflows/release.yml/badge.svg)](https://github.com/Faizulmd13/voce/actions/workflows/release.yml)
+[![Windows](https://img.shields.io/badge/Windows-v1.0.1-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/Faizulmd13/voce/releases/latest)
+[![macOS](https://img.shields.io/badge/macOS-v1.0.1-000000?style=flat-square&logo=apple&logoColor=white)](https://github.com/Faizulmd13/voce/releases/latest)
+[![Linux](https://img.shields.io/badge/Linux-v1.0.1-FCC624?style=flat-square&logo=linux&logoColor=black)](https://github.com/Faizulmd13/voce/releases/latest)
+<br>
+[![Tauri](https://img.shields.io/badge/Tauri-v2-24C8DB?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Rust](https://img.shields.io/badge/Rust-Backend-000000?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-22C55E?style=flat-square)](LICENSE)
 
 </div>
-
 ---
 
 ## ⚡ Highlights & Key Features
