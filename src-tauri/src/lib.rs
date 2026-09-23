@@ -96,6 +96,14 @@ pub fn run() {
             target_language: Mutex::new("English".to_string()),
             auto_paste: Mutex::new(true),
         })
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            println!("[Voce Single-Instance] Secondary launch intercepted with args: {:?}", argv);
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
@@ -107,6 +115,14 @@ pub fn run() {
                 .add_migrations("sqlite:voce.db", migrations)
                 .build(),
         )
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
+            }
+        })
         .setup(|app| {
             let global_shortcut = app.global_shortcut();
 

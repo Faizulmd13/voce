@@ -375,9 +375,26 @@ export async function loadDictationMetricsFromDb(): Promise<{ totalWords: number
         'SELECT COALESCE(SUM(word_count), 0) AS total_words, COUNT(*) AS total_dictations FROM dictations'
       );
       if (rows && rows.length > 0) {
+        const totalWords = Number(rows[0].total_words || 0);
+        const totalDictations = Number(rows[0].total_dictations || 0);
+
+        // Check local storage fallback if DB returned 0
+        let cachedWords = 0;
+        let cachedDictations = 0;
+        const local = localStorage.getItem('voce_dictation_metrics');
+        if (local) {
+          try {
+            const parsed = JSON.parse(local);
+            cachedWords = Number(parsed.totalWords || 0);
+            cachedDictations = Number(parsed.totalDictations || 0);
+          } catch {
+            // ignore
+          }
+        }
+
         const res = {
-          totalWords: Number(rows[0].total_words || 0),
-          totalDictations: Number(rows[0].total_dictations || 0),
+          totalWords: Math.max(totalWords, cachedWords),
+          totalDictations: Math.max(totalDictations, cachedDictations),
         };
         localStorage.setItem('voce_dictation_metrics', JSON.stringify(res));
         return res;
@@ -406,16 +423,30 @@ export async function insertDictationToDb(record: DictationRecord): Promise<void
           record.durationMs || 0,
         ]
       );
+      // Reload authoritative aggregate sum from SQLite and sync to localStorage
+      await loadDictationMetricsFromDb();
+    } else {
+      // Browser fallback mode without SQLite
+      let currentWords = 0;
+      let currentDictations = 0;
+      const local = localStorage.getItem('voce_dictation_metrics');
+      if (local) {
+        try {
+          const parsed = JSON.parse(local);
+          currentWords = Number(parsed.totalWords || 0);
+          currentDictations = Number(parsed.totalDictations || 0);
+        } catch {
+          // ignore
+        }
+      }
+      localStorage.setItem(
+        'voce_dictation_metrics',
+        JSON.stringify({
+          totalWords: currentWords + record.wordCount,
+          totalDictations: currentDictations + 1,
+        })
+      );
     }
-    // Update local cache
-    const current = await loadDictationMetricsFromDb();
-    localStorage.setItem(
-      'voce_dictation_metrics',
-      JSON.stringify({
-        totalWords: current.totalWords + record.wordCount,
-        totalDictations: current.totalDictations + 1,
-      })
-    );
   } catch (e) {
     console.error('Failed to insert dictation into SQLite:', e);
   }

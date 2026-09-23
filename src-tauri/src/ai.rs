@@ -1,6 +1,5 @@
 use crate::models::{DictationMetrics, DictationPayload, TranslationPayload, UserProfile};
 use sqlx::{sqlite::SqliteConnectOptions, Connection, Row, SqliteConnection};
-use std::str::FromStr;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 
@@ -11,9 +10,8 @@ async fn get_voce_sqlite_conn(app: &AppHandle) -> Result<SqliteConnection, Strin
         .map_err(|e| format!("Failed to get app_data_dir: {}", e))?;
     let _ = std::fs::create_dir_all(&app_data_dir);
     let db_path = app_data_dir.join("voce.db");
-    let conn_str = format!("sqlite://{}", db_path.to_string_lossy().replace('\\', "/"));
-    let opts = SqliteConnectOptions::from_str(&conn_str)
-        .map_err(|e| format!("Invalid connection options: {}", e))?
+    let opts = SqliteConnectOptions::new()
+        .filename(&db_path)
         .create_if_missing(true);
 
     let mut conn = SqliteConnection::connect_with(&opts)
@@ -218,10 +216,11 @@ pub async fn execute_cloud_transcription(
         transcript, word_count
     );
 
+    let stt_id = format!("stt_{}", chrono::Local::now().timestamp_millis());
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
     if word_count > 0 {
         if let Ok(mut conn) = get_voce_sqlite_conn(&app).await {
-            let stt_id = format!("stt_{}", chrono::Local::now().timestamp_millis());
-            let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
             let _ = sqlx::query(
                 "INSERT INTO dictations (id, word_count, timestamp, duration_ms) VALUES (?1, ?2, ?3, ?4)"
             )
@@ -238,6 +237,8 @@ pub async fn execute_cloud_transcription(
     let _ = app.emit(
         "transcription-completed",
         serde_json::json!({
+            "id": &stt_id,
+            "timestamp": &timestamp,
             "text": &transcript,
             "words": word_count,
             "word_count": word_count,

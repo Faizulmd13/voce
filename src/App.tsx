@@ -75,13 +75,27 @@ export const App: React.FC = () => {
   const [activePage, setActivePage] = useState<NavPage>('home');
   const [settings, setSettings] = useState<UserSettings>(INITIAL_SETTINGS);
   const [history, setHistory] = useState<TranslationRecord[]>(INITIAL_HISTORY);
-  const [metrics, setMetrics] = useState<AppMetrics>({
-    totalWordsDictated: 0,
-    totalCharsTranslated: 0,
-    totalDictationsCount: 0,
-    totalTranslationsCount: 0,
-    daemonStatus: 'active',
-    lastActiveTimestamp: new Date().toISOString(),
+  const [metrics, setMetrics] = useState<AppMetrics>(() => {
+    let initialWords = 0;
+    let initialDictations = 0;
+    try {
+      const cached = localStorage.getItem('voce_dictation_metrics');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        initialWords = Number(parsed.totalWords || 0);
+        initialDictations = Number(parsed.totalDictations || 0);
+      }
+    } catch {
+      // ignore
+    }
+    return {
+      totalWordsDictated: initialWords,
+      totalCharsTranslated: 0,
+      totalDictationsCount: initialDictations,
+      totalTranslationsCount: 0,
+      daemonStatus: 'active',
+      lastActiveTimestamp: new Date().toISOString(),
+    };
   });
 
   const { performCloudSync } = useSync();
@@ -115,11 +129,26 @@ export const App: React.FC = () => {
   );
 
   const handleTranscription = useCallback((words: number) => {
-    setMetrics((prev) => ({
-      ...prev,
-      totalWordsDictated: prev.totalWordsDictated + words,
-      totalDictationsCount: prev.totalDictationsCount + 1,
-    }));
+    setMetrics((prev) => {
+      const updatedWords = prev.totalWordsDictated + words;
+      const updatedCount = prev.totalDictationsCount + 1;
+      try {
+        localStorage.setItem(
+          'voce_dictation_metrics',
+          JSON.stringify({
+            totalWords: updatedWords,
+            totalDictations: updatedCount,
+          })
+        );
+      } catch {
+        // ignore
+      }
+      return {
+        ...prev,
+        totalWordsDictated: updatedWords,
+        totalDictationsCount: updatedCount,
+      };
+    });
   }, []);
 
   const handleTranslation = useCallback((record: TranslationRecord) => {
@@ -153,14 +182,13 @@ export const App: React.FC = () => {
       return updated;
     });
     setHistory([]);
-    setMetrics({
-      totalWordsDictated: 0,
+    setMetrics((prev) => ({
+      ...prev,
       totalCharsTranslated: 0,
-      totalDictationsCount: 0,
       totalTranslationsCount: 0,
       daemonStatus: 'active',
       lastActiveTimestamp: new Date().toISOString(),
-    });
+    }));
   }, []);
 
   const handleSyncCompleted = useCallback(async (payload?: { bookmarks?: BookmarkItem[]; translations?: TranslationRecord[] }) => {
@@ -212,7 +240,7 @@ export const App: React.FC = () => {
 
       const totalChars = dbHistory.reduce((acc, curr) => acc + (curr.charCount || curr.sourceText.length), 0);
       
-      // Load persisted word count & dictations metrics from SQLite
+      // Load persisted word count & dictations metrics from SQLite & fallbacks
       let persistedWords = 0;
       let persistedDictations = 0;
       try {
@@ -221,18 +249,57 @@ export const App: React.FC = () => {
         persistedDictations = Number(dictMetrics.total_dictations || 0);
       } catch (err) {
         console.warn('Failed to fetch dictation metrics via Tauri command, using SQLite DB fallback:', err);
-        const localDictMetrics = await loadDictationMetricsFromDb();
-        persistedWords = localDictMetrics.totalWords;
-        persistedDictations = localDictMetrics.totalDictations;
       }
 
-      setMetrics((prev) => ({
-        ...prev,
-        totalCharsTranslated: totalChars,
-        totalTranslationsCount: dbHistory.length,
-        totalWordsDictated: persistedWords,
-        totalDictationsCount: persistedDictations,
-      }));
+      // If backend returned 0 or command failed, check SQLite plugin directly
+      if (persistedWords === 0 && persistedDictations === 0) {
+        try {
+          const localDictMetrics = await loadDictationMetricsFromDb();
+          if (localDictMetrics.totalWords > 0 || localDictMetrics.totalDictations > 0) {
+            persistedWords = localDictMetrics.totalWords;
+            persistedDictations = localDictMetrics.totalDictations;
+          }
+        } catch (err) {
+          console.warn('Failed to load dictation metrics from SQLite DB:', err);
+        }
+      }
+
+      // If still 0, check localStorage fallback
+      if (persistedWords === 0 && persistedDictations === 0) {
+        try {
+          const cached = localStorage.getItem('voce_dictation_metrics');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            persistedWords = Number(parsed.totalWords || 0);
+            persistedDictations = Number(parsed.totalDictations || 0);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      setMetrics((prev) => {
+        const finalWords = Math.max(prev.totalWordsDictated, persistedWords);
+        const finalDictations = Math.max(prev.totalDictationsCount, persistedDictations);
+        try {
+          localStorage.setItem(
+            'voce_dictation_metrics',
+            JSON.stringify({
+              totalWords: finalWords,
+              totalDictations: finalDictations,
+            })
+          );
+        } catch {
+          // ignore
+        }
+        return {
+          ...prev,
+          totalCharsTranslated: totalChars,
+          totalTranslationsCount: dbHistory.length,
+          totalWordsDictated: finalWords,
+          totalDictationsCount: finalDictations,
+        };
+      });
 
       // Check stored Google OAuth profile & trigger bidirectional cloud sync if logged in
       try {

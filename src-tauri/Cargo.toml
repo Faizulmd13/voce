@@ -1,6 +1,6 @@
 [package]
 name = "voce"
-version = "1.0.2"
+version = "1.0.3"
 description = "Voce - AI Desktop Assistant powered by Groq Cloud"
 authors = ["Faizul <faizul@voce.ai>"]
 edition = "2021"
@@ -21,6 +21,7 @@ dotenvy = "0.15"
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
 tauri-plugin-store = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-autostart = "2"

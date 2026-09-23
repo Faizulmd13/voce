@@ -21,14 +21,14 @@ export function useTauriEvents({
 }: UseTauriEventsProps) {
   useEffect(() => {
     // 1. Transcription completed event
-    const unlistenSttPromise = listen<{ text?: string; words?: number; word_count?: number }>('transcription-completed', async (event) => {
+    const unlistenSttPromise = listen<{ id?: string; timestamp?: string; text?: string; words?: number; word_count?: number }>('transcription-completed', async (event) => {
       if (event.payload) {
         const words = event.payload.words ?? event.payload.word_count ?? (event.payload.text ? event.payload.text.split(/\s+/).filter(Boolean).length : 0);
         if (words > 0) {
           const record: DictationRecord = {
-            id: `stt_${Date.now()}`,
+            id: event.payload.id || `stt_${Date.now()}`,
             wordCount: words,
-            timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+            timestamp: event.payload.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 19),
             durationMs: 0,
           };
           await insertDictationToDb(record);

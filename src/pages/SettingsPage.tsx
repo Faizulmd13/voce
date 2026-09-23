@@ -200,17 +200,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
 
         {/* STT Hotkey Row */}
-        <div className="p-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-neutral-950 border border-neutral-800 flex items-center justify-center text-emerald-400">
+        <div className="p-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-8 h-8 rounded-lg bg-neutral-950 border border-neutral-800 flex items-center justify-center text-emerald-400 shrink-0">
               <Mic className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <span className="text-sm font-medium text-neutral-200 block">Dictation Hotkey</span>
-              <span className="text-xs text-neutral-500">Hold or press to activate voice recording overlay</span>
+              <span className="text-xs text-neutral-500 block leading-relaxed">Hold or press to activate voice recording overlay</span>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-1.5">
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
             {editingHotkey === 'stt' ? (
               <div className="flex items-center gap-2">
                 <input
@@ -227,7 +227,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       }
                     }, 200);
                   }}
-                  className="bg-neutral-950 border border-emerald-500 text-emerald-400 px-3.5 py-1.5 rounded-lg text-xs font-mono focus:outline-none text-center animate-pulse min-w-[160px] cursor-pointer shadow-sm shadow-emerald-500/20"
+                  className="bg-neutral-950 border border-emerald-500 text-emerald-400 px-3.5 py-1.5 rounded-lg text-xs font-mono focus:outline-none text-center animate-pulse min-w-[140px] sm:min-w-[160px] cursor-pointer shadow-sm shadow-emerald-500/20"
                 />
                 <button
                   type="button"
@@ -256,17 +256,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
 
         {/* Translation Hotkey Row */}
-        <div className="p-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-neutral-950 border border-neutral-800 flex items-center justify-center text-emerald-400">
+        <div className="p-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-8 h-8 rounded-lg bg-neutral-950 border border-neutral-800 flex items-center justify-center text-emerald-400 shrink-0">
               <Languages className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <span className="text-sm font-medium text-neutral-200 block">Translation Hotkey</span>
-              <span className="text-xs text-neutral-500">Reads highlighted text and opens translation overlay</span>
+              <span className="text-xs text-neutral-500 block leading-relaxed">Reads highlighted text and opens translation overlay</span>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-1.5">
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
             {editingHotkey === 'translate' ? (
               <div className="flex items-center gap-2">
                 <input
@@ -283,7 +283,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       }
                     }, 200);
                   }}
-                  className="bg-neutral-950 border border-emerald-500 text-emerald-400 px-3.5 py-1.5 rounded-lg text-xs font-mono focus:outline-none text-center animate-pulse min-w-[160px] cursor-pointer shadow-sm shadow-emerald-500/20"
+                  className="bg-neutral-950 border border-emerald-500 text-emerald-400 px-3.5 py-1.5 rounded-lg text-xs font-mono focus:outline-none text-center animate-pulse min-w-[140px] sm:min-w-[160px] cursor-pointer shadow-sm shadow-emerald-500/20"
                 />
                 <button
                   type="button"
@@ -312,17 +312,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
 
         {/* Bookmark Hotkey Row */}
-        <div className="p-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-neutral-950 border border-neutral-800 flex items-center justify-center text-emerald-400">
+        <div className="p-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-8 h-8 rounded-lg bg-neutral-950 border border-neutral-800 flex items-center justify-center text-emerald-400 shrink-0">
               <Bookmark className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <span className="text-sm font-medium text-neutral-200 block">Bookmark Capture Hotkey</span>
-              <span className="text-xs text-neutral-500">Captures highlighted text and opens bookmark creation overlay</span>
+              <span className="text-xs text-neutral-500 block leading-relaxed">Captures highlighted text and opens bookmark creation overlay</span>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-1.5">
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
             {editingHotkey === 'bookmark' ? (
               <div className="flex items-center gap-2">
                 <input
@@ -339,7 +339,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       }
                     }, 200);
                   }}
-                  className="bg-neutral-950 border border-emerald-500 text-emerald-400 px-3.5 py-1.5 rounded-lg text-xs font-mono focus:outline-none text-center animate-pulse min-w-[160px] cursor-pointer shadow-sm shadow-emerald-500/20"
+                  className="bg-neutral-950 border border-emerald-500 text-emerald-400 px-3.5 py-1.5 rounded-lg text-xs font-mono focus:outline-none text-center animate-pulse min-w-[140px] sm:min-w-[160px] cursor-pointer shadow-sm shadow-emerald-500/20"
                 />
                 <button
                   type="button"
@@ -368,21 +368,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
 
         {/* Auto-Paste to Cursor Toggle */}
-        <div className="p-5 flex items-center justify-between">
-          <div>
+        <div className="p-5 flex items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
             <span className="text-sm font-medium text-neutral-200 block">Simulate Direct Cursor Paste</span>
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-neutral-500 block mt-0.5 leading-relaxed">
               Automatically pastes transcribed text directly into the active OS window upon dictation completion
             </span>
           </div>
           <button
+            type="button"
+            role="switch"
+            aria-checked={settings.autoPasteToCursor}
+            aria-label="Simulate Direct Cursor Paste"
             onClick={() => onUpdateSettings({ autoPasteToCursor: !settings.autoPasteToCursor })}
-            className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${
-              settings.autoPasteToCursor ? 'bg-emerald-500' : 'bg-neutral-800'
+            className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out relative flex items-center p-0.5 shrink-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-2 focus:ring-offset-neutral-900 ${
+              settings.autoPasteToCursor ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-neutral-800 hover:bg-neutral-700'
             }`}
           >
             <div
-              className={`w-5 h-5 rounded-full bg-neutral-100 shadow-md transform transition-transform ${
+              className={`w-5 h-5 rounded-full bg-neutral-100 shadow-md transform transition-transform duration-200 ease-in-out ${
                 settings.autoPasteToCursor ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
@@ -390,21 +394,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
 
         {/* Autostart on Boot Toggle */}
-        <div className="p-5 flex items-center justify-between">
-          <div>
+        <div className="p-5 flex items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
             <span className="text-sm font-medium text-neutral-200 block">Launch Voce on Startup</span>
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-neutral-500 block mt-0.5 leading-relaxed">
               Automatically start Voce in the background system tray when Windows boots
             </span>
           </div>
           <button
+            type="button"
+            role="switch"
+            aria-checked={autostartEnabled}
+            aria-label="Launch Voce on Startup"
             onClick={handleToggleAutostart}
-            className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${
-              autostartEnabled ? 'bg-emerald-500' : 'bg-neutral-800'
+            className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out relative flex items-center p-0.5 shrink-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-2 focus:ring-offset-neutral-900 ${
+              autostartEnabled ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-neutral-800 hover:bg-neutral-700'
             }`}
           >
             <div
-              className={`w-5 h-5 rounded-full bg-neutral-100 shadow-md transform transition-transform ${
+              className={`w-5 h-5 rounded-full bg-neutral-100 shadow-md transform transition-transform duration-200 ease-in-out ${
                 autostartEnabled ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
@@ -412,15 +420,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
 
         {/* Target Translation Language */}
-        <div className="p-5 flex items-center justify-between">
-          <div>
+        <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="min-w-0 flex-1">
             <span className="text-sm font-medium text-neutral-200 block">Default Target Translation Language</span>
-            <span className="text-xs text-neutral-500">Destination language for text translation hotkey</span>
+            <span className="text-xs text-neutral-500 block mt-0.5 leading-relaxed">Destination language for text translation hotkey</span>
           </div>
           <select
             value={settings.targetLanguage}
             onChange={(e) => onUpdateSettings({ targetLanguage: e.target.value })}
-            className="bg-neutral-950 border border-neutral-800 text-neutral-200 text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-neutral-700"
+            className="bg-neutral-950 border border-neutral-800 text-neutral-200 text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-neutral-700 shrink-0 self-start sm:self-auto"
           >
             <option value="English">English (eng_Latn)</option>
             <option value="Spanish">Spanish (spa_Latn)</option>
@@ -438,15 +446,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
 
         {/* Audio Input Selector */}
-        <div className="p-5 flex items-center justify-between">
-          <div>
+        <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="min-w-0 flex-1">
             <span className="text-sm font-medium text-neutral-200 block">Microphone Device</span>
-            <span className="text-xs text-neutral-500">Default audio input stream used for voice dictation recording</span>
+            <span className="text-xs text-neutral-500 block mt-0.5 leading-relaxed">Default audio input stream used for voice dictation recording</span>
           </div>
           <select
             value={settings.audioDevice}
             onChange={(e) => onUpdateSettings({ audioDevice: e.target.value })}
-            className="bg-neutral-950 border border-neutral-800 text-neutral-200 text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-neutral-700"
+            className="bg-neutral-950 border border-neutral-800 text-neutral-200 text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-neutral-700 shrink-0 self-start sm:self-auto"
           >
             <option value="Default System Microphone">Default System Microphone</option>
             <option value="Realtek High Definition Audio">Realtek High Definition Audio</option>
