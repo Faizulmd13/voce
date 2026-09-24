@@ -30,9 +30,9 @@
 
 | Platform | Distribution | Requirements |
 |----------|--------------|--------------|
-| **Windows** | [voce_1.0.3.exe](https://github.com/Faizulmd13/voce/releases/latest) | Windows 10+ |
-| **Linux** | [voce_1.0.3.deb](https://github.com/Faizulmd13/voce/releases/latest) | Debian / Ubuntu |
-| **macOS** | [voce_1.0.3.app](https://github.com/Faizulmd13/voce/releases/latest) | macOS 10.15+ |
+| **Windows** | [voce_1.0.4.exe](https://github.com/Faizulmd13/voce/releases/latest) | Windows 10+ |
+| **Linux** | [voce_1.0.4.deb](https://github.com/Faizulmd13/voce/releases/latest) | Debian / Ubuntu |
+| **macOS** | [voce_1.0.4.app](https://github.com/Faizulmd13/voce/releases/latest) | macOS 10.15+ |
 
 *Note: If Windows SmartScreen blocks the installation of the `.exe`, click **More info** -> **Run anyway**. This is standard for indie-developed binaries pending an enterprise code signing certificate.*
 
