@@ -79,5 +79,5 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Voce ${{ github.ref_name }}"
           releaseBody: "Automated production build for Windows, macOS, and Linux."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
